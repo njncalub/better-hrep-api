@@ -38,3 +38,58 @@ export interface CongressReferenceItem {
 
 export type CongressReferenceResponse = BasicResponse<CongressReferenceItem[]>;
 
+/**
+ * Bill item from principal_authored_bills array
+ */
+export interface PrincipalAuthoredBill {
+  idx: number;
+  no: number;
+  id: number;
+  congress: number;
+  bill_no: string;
+  author: string;
+  auth_flag: boolean;
+  final_flag: boolean;
+  manual_flag: boolean;
+  auth_source: string;
+  date?: string;
+  sequence_no: number;
+  name: string;
+  name_code: string;
+  journal_no?: string;
+  session_no?: string;
+}
+
+/**
+ * House member item from POST /house-members/list
+ */
+export interface HouseMemberItem {
+  id: number;
+  type: string | null;
+  district: string | null;
+  author_id: string;
+  fullname: string;
+  last_name: string;
+  first_name: string;
+  middle_name: string;
+  suffix: string | null;
+  nick_name: string;
+  email: string | null;
+  website: string | null;
+  room: string | null;
+  local: string | null;
+  directline: string | null;
+  chief_of_staff: string | null;
+  party_affilation: string | null;
+  party_affilation_desc: string | null;
+  remarks: string | null;
+  current: boolean;
+  photo: string | null;
+  memberships: unknown | null;
+  committee_membership: unknown | null;
+  principal_authored_bills: PrincipalAuthoredBill[] | null;
+  logs: unknown | null;
+}
+
+export type HouseMembersResponse = PaginatedResponse<HouseMemberItem>;
+

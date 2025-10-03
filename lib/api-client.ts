@@ -1,5 +1,5 @@
 import "jsr:@std/dotenv/load";
-import type { CongressReferenceResponse } from "../types/source.ts";
+import type { CongressReferenceResponse, HouseMembersResponse } from "../types/source.ts";
 
 const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
 const X_HREP_WEBSITE_BACKEND = Deno.env.get("X_HREP_WEBSITE_BACKEND")!;
@@ -47,6 +47,20 @@ export async function fetchFromAPI<T>(
 /**
  * Fetch congress reference data from /system-config/reference-congress
  */
-export async function fetchCongressReference(): Promise<CongressReferenceResponse> {
+export function fetchCongressReference(): Promise<CongressReferenceResponse> {
   return fetchFromAPI<CongressReferenceResponse>("/system-config/reference-congress");
+}
+
+/**
+ * Fetch house members list from /house-members/list
+ */
+export function fetchHouseMembers(
+  page: number = 0,
+  limit: number = 100,
+  filter: string = ""
+): Promise<HouseMembersResponse> {
+  return fetchFromAPI<HouseMembersResponse>("/house-members/list", {
+    method: "POST",
+    body: { page, limit, filter },
+  });
 }
