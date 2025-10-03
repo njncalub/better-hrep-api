@@ -4,6 +4,8 @@ import type {
   HouseMembersResponse,
   CoAuthoredBillsResponse,
   CommitteeMembershipResponse,
+  HouseMemberDDLResponse,
+  BillsSearchResponse,
 } from "../types/source.ts";
 
 const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
@@ -94,5 +96,73 @@ export function fetchCommitteeMembership(
   return fetchFromAPI<CommitteeMembershipResponse>("/house-members/committee-membership", {
     method: "POST",
     body: { member_code: memberCode },
+  });
+}
+
+/**
+ * Fetch house members DDL reference from GET /house-members/ddl-reference
+ * This returns a simplified list with membership congress numbers
+ */
+export function fetchHouseMembersDDL(): Promise<HouseMemberDDLResponse> {
+  return fetchFromAPI<HouseMemberDDLResponse>("/house-members/ddl-reference");
+}
+
+/**
+ * Fetch principal authored bills for a specific author from /house-members/principal-author
+ */
+export function fetchPrincipalAuthoredBills(
+  author: string,
+  page: number = 0,
+  limit: number = 1000,
+  filter: string = ""
+): Promise<CoAuthoredBillsResponse> {
+  return fetchFromAPI<CoAuthoredBillsResponse>("/house-members/principal-author", {
+    method: "POST",
+    body: { page, limit, filter, author },
+  });
+}
+
+/**
+ * Search bills from POST /bills/search
+ */
+export function fetchBillsSearch(params: {
+  page?: number;
+  limit?: number;
+  congress: number;
+  significance?: string;
+  field?: string;
+  numbers?: string;
+  author_id: string;
+  author_type: "authorship" | "coauthorship" | "Both";
+  committee_id?: string;
+  title?: string;
+}): Promise<BillsSearchResponse> {
+  const {
+    page = 0,
+    limit = 999,
+    congress,
+    significance = "Both",
+    field = "Author",
+    numbers = "",
+    author_id,
+    author_type,
+    committee_id = "",
+    title = "",
+  } = params;
+
+  return fetchFromAPI<BillsSearchResponse>("/bills/search", {
+    method: "POST",
+    body: {
+      page,
+      limit,
+      congress,
+      significance,
+      field,
+      numbers,
+      author_id,
+      author_type,
+      committee_id,
+      title,
+    },
   });
 }

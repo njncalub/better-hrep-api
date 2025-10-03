@@ -1,6 +1,11 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { fetchHouseMembers, fetchCoAuthoredBills, fetchCommitteeMembership } from "../lib/api-client.ts";
-import { mapCongressId } from "../lib/congress-mapper.ts";
+import {
+  fetchHouseMembers,
+  fetchCoAuthoredBills,
+  fetchCommitteeMembership,
+  fetchBillsSearch,
+} from "../lib/api-client.ts";
+import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
 import { PaginatedPeopleSchema, PersonSchema, type Person, type Document, type Committee } from "../types/api.ts";
 import type { HouseMemberItem } from "../types/source.ts";
 
@@ -18,8 +23,8 @@ const QuerySchema = z.object({
       name: "limit",
       in: "query",
     },
-    example: "100",
-    description: "Number of items per page (max 1126)",
+    example: "25",
+    description: "Number of items per page",
   }),
 });
 
@@ -102,14 +107,20 @@ const personByIdRoute = createRoute({
     },
   },
   tags: ["People"],
-  summary: "Get a specific person by ID (⚠️ SLOW - Not Recommended)",
-  description: "⚠️ **WARNING: This endpoint is slow and should be avoided.** The source HREP API does not provide a way to fetch a single person by ID, so this endpoint must paginate through all members until the requested person is found. This can take several seconds. **Recommendation:** Use `GET /people` with pagination instead and filter client-side.",
+  summary: "Get a specific person by ID",
+  description: "Returns details for a specific house member by their person ID. Uses cached data when available for fast responses.",
 });
 
 /**
  * Transform source API data to cleaned API format
  */
 async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
+  // Get congress memberships from cache
+  const kv = await Deno.openKv();
+  const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
+  await kv.close();
+  const congressMemberships = membershipEntry.value ?? [];
+
   // Fetch co-authored bills for this member
   let coAuthoredDocuments: Document[] = [];
   try {
@@ -133,6 +144,7 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
       committees = committeeResponse.data.rows.map((committee) => ({
         congress: mapCongressId(committee.congress),
         committeeId: committee.committee_code,
+        name: committee.name,
         position: committee.title,
         journalNo: committee.journal_no,
       }));
@@ -150,6 +162,7 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
     middleName: member.middle_name,
     suffix: member.suffix,
     nickName: member.nick_name,
+    congressMemberships,
     authoredDocuments:
       member.principal_authored_bills?.map((bill) => ({
         congress: mapCongressId(bill.congress),
@@ -166,7 +179,7 @@ peopleRouter.openapi(peopleRoute, async (c) => {
   try {
     const { page: pageStr, limit: limitStr } = c.req.valid("query");
     const page = pageStr ? parseInt(pageStr, 10) : 0;
-    const limit = limitStr ? parseInt(limitStr, 10) : 100;
+    const limit = limitStr ? parseInt(limitStr, 10) : 25;
 
     const response = await fetchHouseMembers(page, limit);
 
@@ -199,38 +212,149 @@ peopleRouter.openapi(peopleRoute, async (c) => {
 peopleRouter.openapi(personByIdRoute, async (c) => {
   try {
     const { personId } = c.req.valid("param");
+    const kv = await Deno.openKv();
 
-    // Paginate through members until we find the person
-    const limit = 100;
-    let page = 0;
-    let member: HouseMemberItem | undefined;
+    // Try to get cached data first
+    const infoEntry = await kv.get<{
+      id: number;
+      lastName: string;
+      firstName: string;
+      middleName: string;
+      suffix: string | null;
+      nickName: string;
+    }>(["people", "byPersonId", personId, "information"]);
 
-    while (true) {
-      const response = await fetchHouseMembers(page, limit);
+    await kv.close();
 
-      if (!response.success || !response.data) {
-        return c.json({ error: "Failed to fetch house members" }, 500);
+    // If we have cached info, use it; otherwise fallback to pagination
+    let person: Person;
+
+    if (infoEntry.value) {
+      // Build person from cache + fresh API calls
+      const info = infoEntry.value;
+
+      // Get membership from cache (need this to query bills by congress)
+      const kv2 = await Deno.openKv();
+      const membershipEntry = await kv2.get<number[]>(["people", "byPersonId", personId, "membership"]);
+      await kv2.close();
+
+      const membershipCongresses = membershipEntry.value ?? [];
+
+      // Fetch all data in parallel
+      const [authoredResults, coAuthoredResults, committeeResponse] = await Promise.all([
+        // Fetch authored documents for all congresses in parallel
+        Promise.all(
+          membershipCongresses.map(async (congress) => {
+            try {
+              const apiCongressId = mapToApiId(congress);
+              const response = await fetchBillsSearch({
+                congress: apiCongressId,
+                author_id: personId,
+                author_type: "authorship",
+              });
+              if (response.success && response.data?.rows) {
+                return response.data.rows.map((bill) => ({
+                  congress: mapCongressId(bill.congress),
+                  documentKey: bill.bill_no,
+                }));
+              }
+              return [];
+            } catch (error) {
+              console.error(`Failed to fetch authored bills for ${personId} in congress ${congress}:`, error);
+              return [];
+            }
+          })
+        ),
+        // Fetch co-authored documents for all congresses in parallel
+        Promise.all(
+          membershipCongresses.map(async (congress) => {
+            try {
+              const apiCongressId = mapToApiId(congress);
+              const response = await fetchBillsSearch({
+                congress: apiCongressId,
+                author_id: personId,
+                author_type: "coauthorship",
+              });
+              if (response.success && response.data?.rows) {
+                return response.data.rows.map((bill) => ({
+                  congress: mapCongressId(bill.congress),
+                  documentKey: bill.bill_no,
+                }));
+              }
+              return [];
+            } catch (error) {
+              console.error(`Failed to fetch co-authored bills for ${personId} in congress ${congress}:`, error);
+              return [];
+            }
+          })
+        ),
+        // Fetch committee memberships
+        fetchCommitteeMembership(personId).catch((error) => {
+          console.error(`Failed to fetch committees for ${personId}:`, error);
+          return { status: 500, success: false, data: { count: 0, rows: [] } };
+        }),
+      ]);
+
+      // Flatten results
+      const authoredDocuments = authoredResults.flat();
+      const coAuthoredDocuments = coAuthoredResults.flat();
+      const committees: Committee[] =
+        committeeResponse.success && committeeResponse.data?.rows
+          ? committeeResponse.data.rows.map((committee) => ({
+              congress: mapCongressId(committee.congress),
+              committeeId: committee.committee_code,
+              name: committee.name,
+              position: committee.title,
+              journalNo: committee.journal_no,
+            }))
+          : [];
+
+      person = {
+        id: info.id,
+        personId,
+        lastName: info.lastName,
+        firstName: info.firstName,
+        middleName: info.middleName,
+        suffix: info.suffix,
+        nickName: info.nickName,
+        congressMemberships: membershipCongresses,
+        authoredDocuments,
+        coAuthoredDocuments,
+        committees,
+      };
+    } else {
+      // Fallback: Paginate through members until we find the person
+      const limit = 100;
+      let page = 0;
+      let member: HouseMemberItem | undefined;
+
+      while (true) {
+        const response = await fetchHouseMembers(page, limit);
+
+        if (!response.success || !response.data) {
+          return c.json({ error: "Failed to fetch house members" }, 500);
+        }
+
+        // Search in current page
+        member = response.data.rows.find((m) => m.author_id === personId);
+
+        if (member) {
+          break; // Found the person
+        }
+
+        // Check if we've reached the end
+        const totalPages = Math.ceil(response.data.count / limit);
+        if (page >= totalPages - 1) {
+          // Person not found after checking all pages
+          return c.json({ error: `Person with ID ${personId} not found` }, 404);
+        }
+
+        page++;
       }
 
-      // Search in current page
-      member = response.data.rows.find((m) => m.author_id === personId);
-
-      if (member) {
-        break; // Found the person
-      }
-
-      // Check if we've reached the end
-      const totalPages = Math.ceil(response.data.count / limit);
-      if (page >= totalPages - 1) {
-        // Person not found after checking all pages
-        return c.json({ error: `Person with ID ${personId} not found` }, 404);
-      }
-
-      page++;
+      // Transform the member data
+      person = await transformHouseMember(member);
     }
-
-    // Transform the member data
-    const person = await transformHouseMember(member);
 
     return c.json(person, 200);
   } catch (error) {

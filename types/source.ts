@@ -157,3 +157,29 @@ export interface CommitteeMembershipResponse {
   };
 }
 
+/**
+ * House member DDL reference item from GET /house-members/ddl-reference
+ * This is used for dropdown lists and contains membership congress numbers
+ */
+export interface HouseMemberDDLItem {
+  id: number;
+  author_id: string;
+  fullname: string;
+  nick_name: string;
+  membership: number[];
+}
+
+export type HouseMemberDDLResponse = BasicResponse<HouseMemberDDLItem[]>;
+
+/**
+ * Bill search item from POST /bills/search
+ */
+export interface BillSearchItem {
+  id: number;
+  congress: number;
+  bill_no: string;
+  // ... other fields exist but we only need congress and bill_no
+}
+
+export type BillsSearchResponse = PaginatedResponse<BillSearchItem>;
+

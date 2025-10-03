@@ -61,6 +61,10 @@ export const CommitteeSchema = z
       example: "0501",
       description: "Committee code/ID",
     }),
+    name: z.string().openapi({
+      example: "ACCOUNTS",
+      description: "Committee name",
+    }),
     position: z.string().openapi({
       example: "Member for the Majority",
       description: "Position/title in the committee",
@@ -106,6 +110,10 @@ export const PersonSchema = z
     nickName: z.string().openapi({
       example: "Dina",
       description: "Nickname or preferred name",
+    }),
+    congressMemberships: z.array(z.number()).openapi({
+      example: [20, 19, 17, 16],
+      description: "List of congress numbers where this person was a member",
     }),
     authoredDocuments: z.array(DocumentSchema).openapi({
       example: [
