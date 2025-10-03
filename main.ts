@@ -15,11 +15,11 @@ app.doc("/doc", {
   info: {
     version: "0.0.1",
     title: "Better HREP API",
-    description: "A cleaner, well-documented proxy API for the House of Representatives website",
+    description: "A cleaner, well-documented proxy API for the House of Representatives website.",
   },
 });
 
 // Swagger UI at root
-app.get("/", swaggerUI({ url: "/doc" }));
+app.get("/", swaggerUI({ url: "/doc", title: "Better HREP API" }));
 
 Deno.serve(app.fetch);
