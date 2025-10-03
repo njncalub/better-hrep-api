@@ -4,6 +4,19 @@ A cleaner, well-documented proxy API for the [House of Representatives website](
 
 The original HREP API is poorly designed with inconsistent data structures, confusing IDs, and unclear field names. This proxy provides a clean, RESTful interface with proper documentation, normalized data, and OpenAPI/Swagger support.
 
+## Prerequisites
+
+- [Deno](https://deno.land/) 2.5 or later
+
+**Install Deno:**
+```bash
+# macOS/Linux
+curl -fsSL https://deno.land/install.sh | sh
+
+# Windows (PowerShell)
+irm https://deno.land/install.ps1 | iex
+```
+
 ## Setup
 
 1. Copy `.env.example` to `.env`:
@@ -116,13 +129,12 @@ Returns details for a specific house member by their person ID.
   "middleName": "R.",
   "suffix": null,
   "nickName": "DINA",
+  "congressMemberships": [20, 19, 17, 16, 15, 13],
   "authoredDocuments": [...],
   "coAuthoredDocuments": [...],
   "committees": [...]
 }
 ```
-
-**Note:** Since the source API doesn't provide a single-person endpoint, this paginates through members (100 per page) until the requested person is found. Best case: person is on page 1 (fast). Worst case: person is on the last page or doesn't exist (slower).
 
 ## Development
 
@@ -142,23 +154,6 @@ deno task fetch /system-config/reference-congress
 
 # POST request
 deno task fetch /house-members/list POST '{"page":0,"limit":10,"filter":""}'
-```
-
-### Project Structure
-
-```
-├── lib/
-│   ├── api-client.ts       # HTTP client for source API
-│   └── congress-mapper.ts  # Congress ID normalization (103 → 20)
-├── routes/
-│   ├── congress.ts         # GET /congress
-│   └── people.ts           # GET /people
-├── scripts/
-│   └── fetch-api.ts        # CLI tool for testing source API
-├── types/
-│   ├── api.ts              # Clean API response types (Zod schemas)
-│   └── source.ts           # Source API response types
-└── main.ts                 # App entry point
 ```
 
 ## Key Features
@@ -226,6 +221,34 @@ deno task fetch /house-members/list POST '{"page":0,"limit":10,"filter":""}'
 - Deeply nested data structure
 - Includes many unused fields (`memberships`, `committee_membership`, `logs`, etc.)
 
+### POST /house-members/principal-author
+
+Returns a paginated list of bills principally authored by a specific house member.
+
+**Proxied by:** `GET /people` and `GET /people/:personId`
+
+**Payload:**
+```json
+{
+  "page": 0,
+  "limit": 1000,
+  "filter": "",
+  "author": "E001"
+}
+```
+
+**Example:**
+```bash
+deno task fetch /house-members/principal-author POST '{"page":0,"limit":10,"filter":"","author":"E001"}'
+```
+
+**Issues:**
+- Uses POST instead of GET for a read-only operation
+- Often returns 500 errors for members without bills
+- Data doesn't always match the `principal_authored_bills` field from `/house-members/list`
+
+**Note:** This endpoint is unreliable and returns inconsistent data. The proxy uses `POST /bills/search` with `author_type: "authorship"` instead for more accurate and consistent results.
+
 ### POST /house-members/co-author
 
 Returns a paginated list of bills co-authored by a specific house member.
@@ -252,7 +275,7 @@ deno task fetch /house-members/co-author POST '{"page":0,"limit":10,"filter":"",
 - Often returns 500 errors for members without co-authored bills
 - Similar structure to principal authored bills but requires separate request
 
-**Note:** The proxy automatically fetches co-authored bills for each member and includes them in the `coAuthoredDocuments` field. If the endpoint fails, an empty array is returned.
+**Note:** This endpoint is unreliable and returns inconsistent data. The proxy uses `POST /bills/search` with `author_type: "coauthorship"` instead for more accurate results.
 
 ### POST /house-members/committee-membership
 
@@ -303,6 +326,83 @@ deno task fetch /house-members/committee-membership POST '{"member_code":"E001"}
 
 **Note:** The proxy automatically fetches committee memberships for each member and includes them in the `committees` field. If the endpoint fails or returns no data, an empty array is returned.
 
+### GET /house-members/ddl-reference
+
+Returns a simplified list of house members with their congress memberships. Used for dropdown lists (DDL = Drop Down List).
+
+**Proxied by:** `POST /index/people/membership` (for caching)
+
+**Example:**
+```bash
+deno task fetch /house-members/ddl-reference
+```
+
+**Response:**
+```json
+{
+  "status": 200,
+  "success": true,
+  "data": [
+    {
+      "id": 536,
+      "author_id": "E001",
+      "fullname": "ABAD, HENEDINA R.",
+      "nick_name": "DINA",
+      "membership": [17, 16, 15, 13]
+    }
+  ]
+}
+```
+
+**Issues:**
+- Uses raw congress IDs (needs normalization, e.g., 103 → 20)
+- Limited information (only membership and basic name data)
+
+**Note:** The proxy uses this endpoint to cache congress memberships for fast lookups. Congress IDs are automatically normalized using the congress mapper.
+
+### POST /bills/search
+
+Searches for bills with advanced filtering options. This is the most reliable endpoint for fetching authored and co-authored bills.
+
+**Proxied by:** `GET /people` and `GET /people/:personId` (for documents)
+
+**Payload:**
+```json
+{
+  "page": 0,
+  "limit": 999,
+  "congress": 103,
+  "significance": "Both",
+  "field": "Author",
+  "numbers": "",
+  "author_id": "E001",
+  "author_type": "authorship",
+  "committee_id": "",
+  "title": ""
+}
+```
+
+**Parameters:**
+- `author_type`: `"authorship"` (principal author), `"coauthorship"` (co-author), or `"Both"`
+- `congress`: Congress number (use raw API ID, e.g., 103 for 20th Congress)
+- `field`: Search field (`"Author"` for author search)
+
+**Example:**
+```bash
+# Authored bills
+deno task fetch /bills/search POST '{"page":0,"limit":10,"congress":103,"significance":"Both","field":"Author","numbers":"","author_id":"E001","author_type":"authorship","committee_id":"","title":""}'
+
+# Co-authored bills
+deno task fetch /bills/search POST '{"page":0,"limit":10,"congress":103,"significance":"Both","field":"Author","numbers":"","author_id":"E001","author_type":"coauthorship","committee_id":"","title":""}'
+```
+
+**Advantages:**
+- More reliable than `/house-members/principal-author` and `/house-members/co-author`
+- Consistent data structure
+- Supports filtering by congress
+- Returns detailed bill information
+
+**Note:** The proxy uses this endpoint to fetch authored and co-authored documents for each member, querying all congress sessions in parallel for better performance.
 
 ## Automated Indexing
 
