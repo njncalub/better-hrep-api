@@ -35,9 +35,9 @@ irm https://deno.land/install.ps1 | iex
 
 ## API Endpoints
 
-### GET /congress
+### GET /congresses
 
-Returns a list of all congress sessions, sorted by congress number (descending).
+Returns a list of all congresses, sorted by congress number (descending).
 
 **Response:**
 ```json
@@ -183,7 +183,7 @@ These are the original HREP API endpoints that this proxy wraps. You can test th
 
 Returns congress session reference data used for dropdown filters.
 
-**Proxied by:** `GET /congress`
+**Proxied by:** `GET /congresses`
 
 **Example:**
 ```bash

@@ -6,7 +6,7 @@
 import { z } from "@hono/zod-openapi";
 
 /**
- * Cleaned congress session data
+ * Congress data
  */
 export const CongressSchema = z
   .object({
@@ -16,7 +16,7 @@ export const CongressSchema = z
     }),
     name: z.string().openapi({
       example: "20th Congress",
-      description: "Display name of the congress session",
+      description: "Display name of the congress",
     }),
   })
   .openapi("Congress");
@@ -24,7 +24,7 @@ export const CongressSchema = z
 export type Congress = z.infer<typeof CongressSchema>;
 
 /**
- * Array of congress sessions
+ * Array of congresses
  */
 export const CongressListSchema = z.array(CongressSchema).openapi("CongressList");
 

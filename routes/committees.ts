@@ -28,7 +28,7 @@ const committeeListRoute = createRoute({
             name: "limit",
             in: "query",
           },
-          example: "100",
+          example: "25",
           description: "Number of items per page",
         }),
     }),
@@ -91,7 +91,7 @@ const committeeByIdRoute = createRoute({
 export const committeesRouter = new OpenAPIHono();
 
 committeesRouter.openapi(committeeListRoute, async (c) => {
-  const { page = "0", limit = "100" } = c.req.valid("query");
+  const { page = "0", limit = "25" } = c.req.valid("query");
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
 

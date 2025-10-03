@@ -4,9 +4,9 @@ import { mapCongressId } from "../lib/congress-mapper.ts";
 import { CongressListSchema, type Congress } from "../types/api.ts";
 import type { CongressReferenceItem } from "../types/source.ts";
 
-const congressRoute = createRoute({
+const congressesRoute = createRoute({
   method: "get",
-  path: "/congress",
+  path: "/congresses",
   responses: {
     200: {
       content: {
@@ -14,7 +14,7 @@ const congressRoute = createRoute({
           schema: CongressListSchema,
         },
       },
-      description: "List of all congress sessions",
+      description: "List of all congresses",
     },
     500: {
       content: {
@@ -27,9 +27,9 @@ const congressRoute = createRoute({
       description: "Internal server error",
     },
   },
-  tags: ["Congress"],
-  summary: "Get all congress sessions",
-  description: "Returns a cleaned list of all congress sessions from the HREP API",
+  tags: ["Congresses"],
+  summary: "Get all congresses",
+  description: "Returns a cleaned list of all congresses from the HREP API",
 });
 
 /**
@@ -51,9 +51,9 @@ function transformCongressItem(item: CongressReferenceItem): Congress | null {
   };
 }
 
-export const congressRouter = new OpenAPIHono();
+export const congressesRouter = new OpenAPIHono();
 
-congressRouter.openapi(congressRoute, async (c) => {
+congressesRouter.openapi(congressesRoute, async (c) => {
   try {
     const response = await fetchCongressReference();
 
