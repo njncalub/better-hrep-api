@@ -81,12 +81,19 @@ export const PersonSchema = z
       example: "Dina",
       description: "Nickname or preferred name",
     }),
-    principalAuthoredBills: z.array(DocumentSchema).openapi({
+    authoredDocuments: z.array(DocumentSchema).openapi({
       example: [
         { congress: 17, documentKey: "HB02385" },
         { congress: 17, documentKey: "HB02386" },
       ],
-      description: "List of bills principally authored",
+      description: "List of documents principally authored",
+    }),
+    coAuthoredDocuments: z.array(DocumentSchema).openapi({
+      example: [
+        { congress: 19, documentKey: "HB01234" },
+        { congress: 20, documentKey: "HB05678" },
+      ],
+      description: "List of documents co-authored",
     }),
   })
   .openapi("Person");

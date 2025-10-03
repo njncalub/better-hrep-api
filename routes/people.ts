@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { fetchHouseMembers } from "../lib/api-client.ts";
+import { fetchHouseMembers, fetchCoAuthoredBills } from "../lib/api-client.ts";
 import { mapCongressId } from "../lib/congress-mapper.ts";
-import { PaginatedPeopleSchema, type Person } from "../types/api.ts";
+import { PaginatedPeopleSchema, type Person, type Document } from "../types/api.ts";
 import type { HouseMemberItem } from "../types/source.ts";
 
 const QuerySchema = z.object({
@@ -57,7 +57,22 @@ const peopleRoute = createRoute({
 /**
  * Transform source API data to cleaned API format
  */
-function transformHouseMember(member: HouseMemberItem): Person {
+async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
+  // Fetch co-authored bills for this member
+  let coAuthoredDocuments: Document[] = [];
+  try {
+    const coAuthorResponse = await fetchCoAuthoredBills(member.author_id);
+    if (coAuthorResponse.success && coAuthorResponse.data?.rows) {
+      coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
+        congress: mapCongressId(bill.congress),
+        documentKey: bill.bill_no,
+      }));
+    }
+  } catch (error) {
+    // If co-author endpoint fails, just return empty array
+    console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
+  }
+
   return {
     id: member.id,
     authorId: member.author_id,
@@ -66,11 +81,12 @@ function transformHouseMember(member: HouseMemberItem): Person {
     middleName: member.middle_name,
     suffix: member.suffix,
     nickName: member.nick_name,
-    principalAuthoredBills:
+    authoredDocuments:
       member.principal_authored_bills?.map((bill) => ({
         congress: mapCongressId(bill.congress),
         documentKey: bill.bill_no,
       })) ?? [],
+    coAuthoredDocuments,
   };
 }
 
@@ -88,7 +104,7 @@ peopleRouter.openapi(peopleRoute, async (c) => {
       return c.json({ error: "Failed to fetch house members" }, 500);
     }
 
-    const people = response.data.rows.map(transformHouseMember);
+    const people = await Promise.all(response.data.rows.map(transformHouseMember));
     const totalPages = Math.ceil(response.data.count / limit);
 
     return c.json(

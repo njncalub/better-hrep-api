@@ -1,5 +1,9 @@
 import "jsr:@std/dotenv/load";
-import type { CongressReferenceResponse, HouseMembersResponse } from "../types/source.ts";
+import type {
+  CongressReferenceResponse,
+  HouseMembersResponse,
+  CoAuthoredBillsResponse,
+} from "../types/source.ts";
 
 const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
 const X_HREP_WEBSITE_BACKEND = Deno.env.get("X_HREP_WEBSITE_BACKEND")!;
@@ -62,5 +66,20 @@ export function fetchHouseMembers(
   return fetchFromAPI<HouseMembersResponse>("/house-members/list", {
     method: "POST",
     body: { page, limit, filter },
+  });
+}
+
+/**
+ * Fetch co-authored bills for a specific author from /house-members/co-author
+ */
+export function fetchCoAuthoredBills(
+  author: string,
+  page: number = 0,
+  limit: number = 1000,
+  filter: string = ""
+): Promise<CoAuthoredBillsResponse> {
+  return fetchFromAPI<CoAuthoredBillsResponse>("/house-members/co-author", {
+    method: "POST",
+    body: { page, limit, filter, author },
   });
 }

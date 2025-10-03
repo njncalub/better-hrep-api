@@ -93,3 +93,28 @@ export interface HouseMemberItem {
 
 export type HouseMembersResponse = PaginatedResponse<HouseMemberItem>;
 
+/**
+ * Co-authored bill item from POST /house-members/co-author
+ * Assuming similar structure to principal authored bills
+ */
+export interface CoAuthoredBillItem {
+  idx: number;
+  no: number;
+  id: number;
+  congress: number;
+  bill_no: string;
+  author: string;
+  auth_flag: boolean;
+  final_flag: boolean;
+  manual_flag: boolean;
+  auth_source: string;
+  date?: string;
+  sequence_no: number;
+  name: string;
+  name_code: string;
+  journal_no?: string;
+  session_no?: string;
+}
+
+export type CoAuthoredBillsResponse = PaginatedResponse<CoAuthoredBillItem>;
+

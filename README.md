@@ -68,7 +68,7 @@ Returns a paginated list of house members with their principal authored bills.
       "middleName": "R.",
       "suffix": null,
       "nickName": "DINA",
-      "principalAuthoredBills": [
+      "authoredDocuments": [
         {
           "congress": 17,
           "documentKey": "HB02385"
@@ -76,6 +76,12 @@ Returns a paginated list of house members with their principal authored bills.
         {
           "congress": 20,
           "documentKey": "HB01234"
+        }
+      ],
+      "coAuthoredDocuments": [
+        {
+          "congress": 19,
+          "documentKey": "HB05678"
         }
       ]
     }
@@ -184,6 +190,34 @@ deno task fetch /house-members/list POST '{"page":0,"limit":10,"filter":""}'
 - Some members have `principal_authored_bills: null`
 - Deeply nested data structure
 - Includes many unused fields (`memberships`, `committee_membership`, `logs`, etc.)
+
+### POST /house-members/co-author
+
+Returns a paginated list of bills co-authored by a specific house member.
+
+**Proxied by:** `GET /people` (included in response)
+
+**Payload:**
+```json
+{
+  "page": 0,
+  "limit": 1000,
+  "filter": "",
+  "author": "E001"
+}
+```
+
+**Example:**
+```bash
+deno task fetch /house-members/co-author POST '{"page":0,"limit":10,"filter":"","author":"E001"}'
+```
+
+**Issues:**
+- Uses POST instead of GET for a read-only operation
+- Often returns 500 errors for members without co-authored bills
+- Similar structure to principal authored bills but requires separate request
+
+**Note:** The proxy automatically fetches co-authored bills for each member and includes them in the `coAuthoredDocuments` field. If the endpoint fails, an empty array is returned.
 
 
 ## Impostor Syndrome Disclaimer
