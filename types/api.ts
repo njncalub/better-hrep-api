@@ -49,6 +49,32 @@ export const DocumentSchema = z
 export type Document = z.infer<typeof DocumentSchema>;
 
 /**
+ * Committee membership
+ */
+export const CommitteeSchema = z
+  .object({
+    congress: z.number().openapi({
+      example: 20,
+      description: "Congress number (normalized, e.g., 103 → 20)",
+    }),
+    committeeId: z.string().openapi({
+      example: "0501",
+      description: "Committee code/ID",
+    }),
+    position: z.string().openapi({
+      example: "Member for the Majority",
+      description: "Position/title in the committee",
+    }),
+    journalNo: z.string().openapi({
+      example: "Journal No. 007",
+      description: "Journal number reference",
+    }),
+  })
+  .openapi("Committee");
+
+export type Committee = z.infer<typeof CommitteeSchema>;
+
+/**
  * Cleaned person (house member) data
  */
 export const PersonSchema = z
@@ -94,6 +120,13 @@ export const PersonSchema = z
         { congress: 20, documentKey: "HB05678" },
       ],
       description: "List of documents co-authored",
+    }),
+    committees: z.array(CommitteeSchema).openapi({
+      example: [
+        { id: 1, name: "Committee on Appropriations", position: "Member" },
+        { id: 2, name: "Committee on Ways and Means", position: "Vice Chair" },
+      ],
+      description: "List of committee memberships",
     }),
   })
   .openapi("Person");

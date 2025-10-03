@@ -83,6 +83,14 @@ Returns a paginated list of house members with their principal authored bills.
           "congress": 19,
           "documentKey": "HB05678"
         }
+      ],
+      "committees": [
+        {
+          "congress": 20,
+          "committeeId": "0501",
+          "position": "Member for the Majority",
+          "journalNo": "Journal No. 007"
+        }
       ]
     }
   ]
@@ -218,6 +226,55 @@ deno task fetch /house-members/co-author POST '{"page":0,"limit":10,"filter":"",
 - Similar structure to principal authored bills but requires separate request
 
 **Note:** The proxy automatically fetches co-authored bills for each member and includes them in the `coAuthoredDocuments` field. If the endpoint fails, an empty array is returned.
+
+### POST /house-members/committee-membership
+
+Returns committee memberships for a specific house member.
+
+**Proxied by:** `GET /people` (included in response)
+
+**Payload:**
+```json
+{
+  "member_code": "E001"
+}
+```
+
+**Example:**
+```bash
+deno task fetch /house-members/committee-membership POST '{"member_code":"E001"}'
+```
+
+**Response:**
+```json
+{
+  "status": 200,
+  "success": true,
+  "data": {
+    "count": 1,
+    "rows": [
+      {
+        "no": "17",
+        "congress": 103,
+        "committee_code": "0501",
+        "name": "ACCOUNTS",
+        "author_id": "K119",
+        "representative": "ACIDRE, JUDE A.",
+        "title": "Member for the Majority",
+        "photo": { ... },
+        "journal_no": "Journal No. 007"
+      }
+    ]
+  }
+}
+```
+
+**Issues:**
+- Uses POST instead of GET for a read-only operation
+- Returns empty arrays for most members (possibly only current members have data)
+- Response structure is not paginated but uses similar `count`/`rows` pattern
+
+**Note:** The proxy automatically fetches committee memberships for each member and includes them in the `committees` field. If the endpoint fails or returns no data, an empty array is returned.
 
 
 ## Impostor Syndrome Disclaimer

@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { fetchHouseMembers, fetchCoAuthoredBills } from "../lib/api-client.ts";
+import { fetchHouseMembers, fetchCoAuthoredBills, fetchCommitteeMembership } from "../lib/api-client.ts";
 import { mapCongressId } from "../lib/congress-mapper.ts";
-import { PaginatedPeopleSchema, type Person, type Document } from "../types/api.ts";
+import { PaginatedPeopleSchema, type Person, type Document, type Committee } from "../types/api.ts";
 import type { HouseMemberItem } from "../types/source.ts";
 
 const QuerySchema = z.object({
@@ -73,6 +73,23 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
     console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
   }
 
+  // Fetch committee memberships for this member
+  let committees: Committee[] = [];
+  try {
+    const committeeResponse = await fetchCommitteeMembership(member.author_id);
+    if (committeeResponse.success && committeeResponse.data?.rows) {
+      committees = committeeResponse.data.rows.map((committee) => ({
+        congress: mapCongressId(committee.congress),
+        committeeId: committee.committee_code,
+        position: committee.title,
+        journalNo: committee.journal_no,
+      }));
+    }
+  } catch (error) {
+    // If committee endpoint fails, just return empty array
+    console.error(`Failed to fetch committees for ${member.author_id}:`, error);
+  }
+
   return {
     id: member.id,
     authorId: member.author_id,
@@ -87,6 +104,7 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
         documentKey: bill.bill_no,
       })) ?? [],
     coAuthoredDocuments,
+    committees,
   };
 }
 

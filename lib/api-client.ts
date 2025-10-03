@@ -3,6 +3,7 @@ import type {
   CongressReferenceResponse,
   HouseMembersResponse,
   CoAuthoredBillsResponse,
+  CommitteeMembershipResponse,
 } from "../types/source.ts";
 
 const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
@@ -81,5 +82,17 @@ export function fetchCoAuthoredBills(
   return fetchFromAPI<CoAuthoredBillsResponse>("/house-members/co-author", {
     method: "POST",
     body: { page, limit, filter, author },
+  });
+}
+
+/**
+ * Fetch committee membership for a specific member from /house-members/committee-membership
+ */
+export function fetchCommitteeMembership(
+  memberCode: string
+): Promise<CommitteeMembershipResponse> {
+  return fetchFromAPI<CommitteeMembershipResponse>("/house-members/committee-membership", {
+    method: "POST",
+    body: { member_code: memberCode },
   });
 }

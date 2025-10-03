@@ -118,3 +118,42 @@ export interface CoAuthoredBillItem {
 
 export type CoAuthoredBillsResponse = PaginatedResponse<CoAuthoredBillItem>;
 
+/**
+ * Committee membership item from POST /house-members/committee-membership
+ */
+export interface CommitteeMembershipItem {
+  no: string;
+  congress: number;
+  committee_code: string;
+  name: string;
+  author_id: string;
+  representative: string;
+  title: string;
+  photo: {
+    id: number;
+    congress: number;
+    module: string;
+    name: string;
+    size: number;
+    type: string;
+    main: boolean;
+    deleted: boolean;
+    parent_id: number;
+    url: string;
+  } | null;
+  journal_no: string;
+}
+
+/**
+ * Response structure for committee membership
+ * Note: Not paginated, just has count and rows
+ */
+export interface CommitteeMembershipResponse {
+  status: number;
+  success: boolean;
+  data: {
+    count: number;
+    rows: CommitteeMembershipItem[];
+  };
+}
+
