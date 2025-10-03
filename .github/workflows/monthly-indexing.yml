@@ -23,6 +23,12 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"key": "${{ secrets.INDEXER_KEY }}"}'
 
+      - name: Index Committees Information Data
+        run: |
+          curl -X POST ${{ secrets.API_BASE_URL }}/index/committees/information \
+            -H "Content-Type: application/json" \
+            -d '{"key": "${{ secrets.INDEXER_KEY }}"}'
+
       - name: Notify Success
         if: success()
         run: echo "✅ Monthly indexing completed successfully"

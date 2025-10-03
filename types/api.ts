@@ -182,3 +182,51 @@ export const PaginatedPeopleSchema = createPaginatedResponseSchema(
 );
 
 export type PaginatedPeople = z.infer<typeof PaginatedPeopleSchema>;
+
+/**
+ * Committee information
+ */
+export const CommitteeInfoSchema = z
+  .object({
+    id: z.number().openapi({
+      example: 40,
+      description: "Unique database ID from the source API",
+    }),
+    committeeId: z.string().openapi({
+      example: "0543",
+      description: "Committee code/ID",
+    }),
+    name: z.string().openapi({
+      example: "YOUTH AND SPORTS DEVELOPMENT",
+      description: "Committee name",
+    }),
+    phone: z.string().nullable().openapi({
+      example: "(02) 8-9514326",
+      description: "Committee phone number",
+    }),
+    jurisdiction: z.string().nullable().openapi({
+      example: "All matters directly and principally relating to...",
+      description: "Committee jurisdiction",
+    }),
+    location: z.string().nullable().openapi({
+      example: "3rd Floor Ramon V. Mitra Bldg., House of Representatives, Quezon City",
+      description: "Committee office location",
+    }),
+    type: z.string().openapi({
+      example: "Standing Committees",
+      description: "Committee type description",
+    }),
+  })
+  .openapi("CommitteeInfo");
+
+export type CommitteeInfo = z.infer<typeof CommitteeInfoSchema>;
+
+/**
+ * Paginated response for committees
+ */
+export const PaginatedCommitteesSchema = createPaginatedResponseSchema(
+  CommitteeInfoSchema,
+  "PaginatedCommittees"
+);
+
+export type PaginatedCommittees = z.infer<typeof PaginatedCommitteesSchema>;

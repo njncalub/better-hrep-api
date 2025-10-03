@@ -183,3 +183,24 @@ export interface BillSearchItem {
 
 export type BillsSearchResponse = PaginatedResponse<BillSearchItem>;
 
+/**
+ * Committee item from POST /committee/list
+ */
+export interface CommitteeListItem {
+  id: number;
+  code: string;
+  name: string;
+  jurisdiction: string | null;
+  location: string | null;
+  phone: string | null;
+  committee_secretary: string | null;
+  members: string | null;
+  profile_data: string | null;
+  email: string | null;
+  type: number;
+  type_desc: string;
+  chairperson: string | null;
+}
+
+export type CommitteeListResponse = PaginatedResponse<CommitteeListItem>;
+

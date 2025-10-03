@@ -6,6 +6,7 @@ import type {
   CommitteeMembershipResponse,
   HouseMemberDDLResponse,
   BillsSearchResponse,
+  CommitteeListResponse,
 } from "../types/source.ts";
 
 const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
@@ -164,5 +165,18 @@ export function fetchBillsSearch(params: {
       committee_id,
       title,
     },
+  });
+}
+
+/**
+ * Fetch committee list from POST /committee/list
+ */
+export function fetchCommitteeList(
+  page: number = 0,
+  limit: number = 100
+): Promise<CommitteeListResponse> {
+  return fetchFromAPI<CommitteeListResponse>("/committee/list", {
+    method: "POST",
+    body: { page, limit },
   });
 }

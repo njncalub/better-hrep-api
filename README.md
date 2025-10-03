@@ -404,6 +404,60 @@ deno task fetch /bills/search POST '{"page":0,"limit":10,"congress":103,"signifi
 
 **Note:** The proxy uses this endpoint to fetch authored and co-authored documents for each member, querying all congress sessions in parallel for better performance.
 
+### POST /committee/list
+
+Returns a paginated list of committees with their details.
+
+**Proxied by:** `POST /index/committees/information` (for caching)
+
+**Payload:**
+```json
+{
+  "page": 0,
+  "limit": 100
+}
+```
+
+**Example:**
+```bash
+deno task fetch /committee/list POST '{"page":0,"limit":10}'
+```
+
+**Response:**
+```json
+{
+  "status": 200,
+  "success": true,
+  "data": {
+    "pageCount": 85,
+    "count": 85,
+    "rows": [
+      {
+        "id": 40,
+        "code": "0543",
+        "name": "YOUTH AND SPORTS DEVELOPMENT",
+        "jurisdiction": "All matters directly and principally relating to...",
+        "location": "3rd Floor Ramon V. Mitra Bldg., House of Representatives, Quezon City",
+        "phone": "(02) 8-9514326  DIRECT LINE, (02) 8-9315001 LOCAL 7149 TRUNK LINE",
+        "committee_secretary": "Ms.  Percie D. Managuelod",
+        "members": "50 Members",
+        "profile_data": "",
+        "email": "committee.youthandsports@house.gov.ph",
+        "type": 76,
+        "type_desc": "Standing Committees",
+        "chairperson": "DY, FAUSTINO MICHAEL CARLOS III T."
+      }
+    ]
+  }
+}
+```
+
+**Issues:**
+- Some committees have `null` as their `code` value (these are skipped during indexing)
+- Response structure uses `pageCount` instead of `totalPages`
+
+**Note:** The proxy uses this endpoint to cache committee information to Deno KV. Committees without a code are skipped since KV keys cannot contain null values.
+
 ## Automated Indexing
 
 The API includes automated monthly indexing via GitHub Actions to keep the cache updated.
@@ -433,6 +487,7 @@ You can manually trigger the indexing workflow:
 The workflow runs automatically on the 1st of every month at 2:00 AM UTC. It performs:
 1. Index people membership data
 2. Index people information data
+3. Index committees information data
 
 ## Impostor Syndrome Disclaimer
 

@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { congressRouter } from "./routes/congress.ts";
 import { peopleRouter } from "./routes/people.ts";
+import { committeesRouter } from "./routes/committees.ts";
 import { indexRouter } from "./routes/index.ts";
 
 const app = new OpenAPIHono({ strict: false });
@@ -9,6 +10,7 @@ const app = new OpenAPIHono({ strict: false });
 // Mount routes
 app.route("/", congressRouter);
 app.route("/", peopleRouter);
+app.route("/", committeesRouter);
 app.route("/", indexRouter);
 
 // The OpenAPI documentation will be available at /doc
