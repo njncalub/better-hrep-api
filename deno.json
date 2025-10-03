@@ -4,8 +4,9 @@
     "@hono/swagger-ui": "npm:@hono/swagger-ui@^0.5.2"
   },
   "tasks": {
-    "start": "deno run -A --watch main.ts",
-    "fetch": "deno run --allow-net --allow-env --allow-read scripts/fetch-api.ts"
+    "start": "deno run -A --unstable-kv --watch main.ts",
+    "fetch": "deno run --allow-net --allow-env --allow-read scripts/fetch-api.ts",
+    "parse-metadata": "deno run --allow-read --allow-write scripts/parse-metadata.ts"
   },
   "compilerOptions": {
     "jsx": "precompile",
