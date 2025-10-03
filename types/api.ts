@@ -83,9 +83,9 @@ export const PersonSchema = z
       example: 536,
       description: "Unique database ID from the source API",
     }),
-    authorId: z.string().openapi({
+    personId: z.string().openapi({
       example: "E001",
-      description: "Unique author identifier",
+      description: "Unique person identifier",
     }),
     lastName: z.string().openapi({
       example: "Abad",

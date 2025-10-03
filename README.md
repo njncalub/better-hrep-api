@@ -44,7 +44,7 @@ Returns a list of all congress sessions, sorted by congress number (descending).
 
 ### GET /people
 
-Returns a paginated list of house members with their principal authored bills.
+Returns a paginated list of house members with their authored bills, co-authored bills, and committees.
 
 **Query Parameters:**
 - `page` (optional): Page number, 0-indexed. Default: `0`
@@ -62,7 +62,7 @@ Returns a paginated list of house members with their principal authored bills.
   "data": [
     {
       "id": 536,
-      "authorId": "E001",
+      "personId": "E001",
       "lastName": "ABAD",
       "firstName": "HENEDINA",
       "middleName": "R.",
@@ -96,6 +96,33 @@ Returns a paginated list of house members with their principal authored bills.
   ]
 }
 ```
+
+### GET /people/:personId
+
+Returns details for a specific house member by their person ID.
+
+**Path Parameters:**
+- `personId`: Unique person identifier (e.g., `E001`)
+
+**Example:** `GET /people/E001`
+
+**Response:**
+```json
+{
+  "id": 536,
+  "personId": "E001",
+  "lastName": "ABAD",
+  "firstName": "HENEDINA",
+  "middleName": "R.",
+  "suffix": null,
+  "nickName": "DINA",
+  "authoredDocuments": [...],
+  "coAuthoredDocuments": [...],
+  "committees": [...]
+}
+```
+
+**Note:** Since the source API doesn't provide a single-person endpoint, this paginates through members (100 per page) until the requested person is found. Best case: person is on page 1 (fast). Worst case: person is on the last page or doesn't exist (slower).
 
 ## Development
 
