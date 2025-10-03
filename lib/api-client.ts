@@ -12,7 +12,7 @@ const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
 const X_HREP_WEBSITE_BACKEND = Deno.env.get("X_HREP_WEBSITE_BACKEND")!;
 
 if (!BASE_API_URL || !X_HREP_WEBSITE_BACKEND) {
-  throw new Error("BASE_API_URL and X_HREP_WEBSITE_BACKEND must be set in .env file");
+  throw new Error("BASE_API_URL and X_HREP_WEBSITE_BACKEND environment variables must be set");
 }
 
 export interface FetchOptions {

@@ -304,6 +304,36 @@ deno task fetch /house-members/committee-membership POST '{"member_code":"E001"}
 **Note:** The proxy automatically fetches committee memberships for each member and includes them in the `committees` field. If the endpoint fails or returns no data, an empty array is returned.
 
 
+## Automated Indexing
+
+The API includes automated monthly indexing via GitHub Actions to keep the cache updated.
+
+### GitHub Secrets Setup
+
+Configure the following secrets in your GitHub repository settings:
+
+1. **`API_BASE_URL`** - Your deployed API URL (e.g., `https://your-api.deno.dev`)
+2. **`INDEXER_KEY`** - The indexer authentication key from your `.env` file
+
+**To add secrets:**
+1. Go to your repository on GitHub
+2. Navigate to Settings → Secrets and variables → Actions
+3. Click "New repository secret"
+4. Add both `API_BASE_URL` and `INDEXER_KEY`
+
+### Manual Indexing Trigger
+
+You can manually trigger the indexing workflow:
+1. Go to the "Actions" tab in your GitHub repository
+2. Select "Monthly Data Indexing" workflow
+3. Click "Run workflow"
+
+### Indexing Schedule
+
+The workflow runs automatically on the 1st of every month at 2:00 AM UTC. It performs:
+1. Index people membership data
+2. Index people information data
+
 ## Impostor Syndrome Disclaimer
 
 **We want your help. No, really.**

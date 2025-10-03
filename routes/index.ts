@@ -1,12 +1,11 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { fetchHouseMembersDDL, fetchHouseMembers } from "../lib/api-client.ts";
 import { mapCongressId } from "../lib/congress-mapper.ts";
-import "jsr:@std/dotenv/load";
 
 const INDEXER_KEY = Deno.env.get("INDEXER_KEY")!;
 
 if (!INDEXER_KEY) {
-  throw new Error("INDEXER_KEY must be set in .env file");
+  throw new Error("INDEXER_KEY environment variable must be set");
 }
 
 const IndexRequestSchema = z.object({
