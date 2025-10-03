@@ -135,21 +135,28 @@ indexRouter.openapi(indexPeopleMembershipRoute, async (c) => {
 
     let indexed = 0;
 
-    // Index each member's congress membership
-    for (const member of response.data) {
-      // Normalize congress IDs (103 → 20)
-      const normalizedMembership = member.membership.map(mapCongressId);
+    // Batch KV writes for better performance
+    const batchSize = 100;
+    for (let i = 0; i < response.data.length; i += batchSize) {
+      const batch = response.data.slice(i, i + batchSize);
 
-      // Store to KV with key: ["people", "byPersonId", authorId, "membership"]
-      await kv.set(
-        ["people", "byPersonId", member.author_id, "membership"],
-        normalizedMembership
+      await Promise.all(
+        batch.map(async (member) => {
+          // Normalize congress IDs (103 → 20)
+          const normalizedMembership = member.membership.map(mapCongressId);
+
+          // Store to KV with key: ["people", "byPersonId", authorId, "membership"]
+          await kv.set(
+            ["people", "byPersonId", member.author_id, "membership"],
+            normalizedMembership
+          );
+
+          indexed++;
+        })
       );
-
-      indexed++;
     }
 
-    await kv.close();
+    kv.close();
 
     return c.json(
       {
@@ -186,29 +193,31 @@ indexRouter.openapi(indexPeopleInformationRoute, async (c) => {
       const response = await fetchHouseMembers(page, limit);
 
       if (!response.success || !response.data) {
-        await kv.close();
+        kv.close();
         return c.json({ error: "Failed to fetch house members" }, 500);
       }
 
-      // Index each member's information
-      for (const member of response.data.rows) {
-        const info = {
-          id: member.id,
-          lastName: member.last_name,
-          firstName: member.first_name,
-          middleName: member.middle_name,
-          suffix: member.suffix,
-          nickName: member.nick_name,
-        };
+      // Batch index members' information in parallel
+      await Promise.all(
+        response.data.rows.map(async (member) => {
+          const info = {
+            id: member.id,
+            lastName: member.last_name,
+            firstName: member.first_name,
+            middleName: member.middle_name,
+            suffix: member.suffix,
+            nickName: member.nick_name,
+          };
 
-        // Store to KV with key: ["people", "byPersonId", authorId, "information"]
-        await kv.set(
-          ["people", "byPersonId", member.author_id, "information"],
-          info
-        );
+          // Store to KV with key: ["people", "byPersonId", authorId, "information"]
+          await kv.set(
+            ["people", "byPersonId", member.author_id, "information"],
+            info
+          );
 
-        indexed++;
-      }
+          indexed++;
+        })
+      );
 
       // Check if we've processed all pages
       const totalPages = Math.ceil(response.data.count / limit);
@@ -219,7 +228,7 @@ indexRouter.openapi(indexPeopleInformationRoute, async (c) => {
       page++;
     }
 
-    await kv.close();
+    kv.close();
 
     return c.json(
       {
