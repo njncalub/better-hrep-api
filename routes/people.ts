@@ -117,90 +117,104 @@ const personByIdRoute = createRoute({
  * Also caches document authorship to KV for use in /congresses endpoints
  */
 async function transformHouseMember(member: HouseMemberItem, latestCongress: number): Promise<Person> {
-  // Get congress memberships from cache
-  const kv = await Deno.openKv();
-  const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
-  const congresses = membershipEntry.value ?? [];
+  let kv: Deno.Kv | null = null;
 
-  // Fetch co-authored bills for this member
-  let coAuthoredDocuments: Document[] = [];
   try {
-    const coAuthorResponse = await fetchCoAuthoredBills(member.author_id);
-    if (coAuthorResponse.success && coAuthorResponse.data?.rows) {
-      coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
+    // Get congress memberships from cache
+    kv = await Deno.openKv();
+    const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
+    const congresses = membershipEntry.value ?? [];
+
+    // Fetch co-authored bills for this member
+    let coAuthoredDocuments: Document[] = [];
+    try {
+      const coAuthorResponse = await fetchCoAuthoredBills(member.author_id);
+      if (coAuthorResponse.success && coAuthorResponse.data?.rows) {
+        coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
+          congress: mapCongressId(bill.congress),
+          documentKey: bill.bill_no,
+        }));
+      }
+    } catch (error) {
+      // If co-author endpoint fails, just return empty array
+      console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
+    }
+
+    // Map authored documents
+    const authoredDocuments: Document[] =
+      member.principal_authored_bills?.map((bill) => ({
         congress: mapCongressId(bill.congress),
         documentKey: bill.bill_no,
-      }));
+      })) ?? [];
+
+    // Cache document authorship for /congresses endpoints
+    // TTL: 5 days for latest congress, no expiration for older congresses
+    const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
+
+    // Cache authored documents
+    try {
+      for (const doc of authoredDocuments) {
+        const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
+        await kv.set(
+          ["congresses", doc.congress, doc.documentKey, "authors", member.author_id],
+          true,
+          expireIn ? { expireIn } : {}
+        );
+      }
+
+      // Cache co-authored documents
+      for (const doc of coAuthoredDocuments) {
+        const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
+        await kv.set(
+          ["congresses", doc.congress, doc.documentKey, "coAuthors", member.author_id],
+          true,
+          expireIn ? { expireIn } : {}
+        );
+      }
+    } catch (error) {
+      console.error(`Failed to cache documents for ${member.author_id}:`, error);
     }
-  } catch (error) {
-    // If co-author endpoint fails, just return empty array
-    console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
-  }
 
-  // Map authored documents
-  const authoredDocuments: Document[] =
-    member.principal_authored_bills?.map((bill) => ({
-      congress: mapCongressId(bill.congress),
-      documentKey: bill.bill_no,
-    })) ?? [];
-
-  // Cache document authorship for /congresses endpoints
-  // TTL: 5 days for latest congress, no expiration for older congresses
-  const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
-
-  // Cache authored documents
-  for (const doc of authoredDocuments) {
-    const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
-    await kv.set(
-      ["congresses", doc.congress, doc.documentKey, "authors", member.author_id],
-      true,
-      expireIn ? { expireIn } : {}
-    );
-  }
-
-  // Cache co-authored documents
-  for (const doc of coAuthoredDocuments) {
-    const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
-    await kv.set(
-      ["congresses", doc.congress, doc.documentKey, "coAuthors", member.author_id],
-      true,
-      expireIn ? { expireIn } : {}
-    );
-  }
-
-  await kv.close();
-
-  // Fetch committee memberships for this member
-  let committees: Committee[] = [];
-  try {
-    const committeeResponse = await fetchCommitteeMembership(member.author_id);
-    if (committeeResponse.success && committeeResponse.data?.rows) {
-      committees = committeeResponse.data.rows.map((committee) => ({
-        congress: mapCongressId(committee.congress),
-        committeeId: committee.committee_code,
-        name: committee.name,
-        position: committee.title,
-        journalNo: committee.journal_no,
-      }));
+    // Fetch committee memberships for this member
+    let committees: Committee[] = [];
+    try {
+      const committeeResponse = await fetchCommitteeMembership(member.author_id);
+      if (committeeResponse.success && committeeResponse.data?.rows) {
+        committees = committeeResponse.data.rows.map((committee) => ({
+          congress: mapCongressId(committee.congress),
+          committeeId: committee.committee_code,
+          name: committee.name,
+          position: committee.title,
+          journalNo: committee.journal_no,
+        }));
+      }
+    } catch (error) {
+      // If committee endpoint fails, just return empty array
+      console.error(`Failed to fetch committees for ${member.author_id}:`, error);
     }
-  } catch (error) {
-    // If committee endpoint fails, just return empty array
-    console.error(`Failed to fetch committees for ${member.author_id}:`, error);
-  }
 
-  return {
-    id: member.id,
-    personId: member.author_id,
-    lastName: member.last_name,
-    firstName: member.first_name,
-    middleName: member.middle_name,
-    suffix: member.suffix,
-    nickName: member.nick_name,
-    congresses,
-    authoredDocuments,
-    coAuthoredDocuments,
-    committees,
-  };
+    return {
+      id: member.id,
+      personId: member.author_id,
+      lastName: member.last_name,
+      firstName: member.first_name,
+      middleName: member.middle_name,
+      suffix: member.suffix,
+      nickName: member.nick_name,
+      congresses,
+      authoredDocuments,
+      coAuthoredDocuments,
+      committees,
+    };
+  } catch (error) {
+    console.error(`Error transforming member ${member.author_id}:`, error);
+    throw error;
+  } finally {
+    // Always close KV connection
+    if (kv) {
+      await kv.close();
+    }
+  }
 }
 
 export const peopleRouter = new OpenAPIHono();
