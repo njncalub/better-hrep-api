@@ -195,10 +195,15 @@ indexRouter.openapi(indexPeopleMembershipRoute, async (c) => {
           // Normalize congress IDs (103 → 20)
           const normalizedMembership = member.membership.map(mapCongressId);
 
-          // Store to KV with key: ["people", "byPersonId", authorId, "membership"]
+          const primaryKey = ["people", "byPersonId", member.author_id, "membership"];
+
+          // Set the primary key
+          await kv.set(primaryKey, normalizedMembership);
+
+          // Set the secondary index by full name - stores the primary key
           await kv.set(
-            ["people", "byPersonId", member.author_id, "membership"],
-            normalizedMembership
+            ["people", "byPersonFullName", member.fullname, "membership"],
+            primaryKey
           );
 
           indexed++;
@@ -259,11 +264,22 @@ indexRouter.openapi(indexPeopleInformationRoute, async (c) => {
             nickName: member.nick_name,
           };
 
+          const primaryKey = ["people", "byPersonId", member.author_id, "information"];
+
           // Store to KV with key: ["people", "byPersonId", authorId, "information"]
-          await kv.set(
-            ["people", "byPersonId", member.author_id, "information"],
-            info
-          );
+          await kv.set(primaryKey, info);
+
+          // If member has principal_authored_bills, create secondary index by name_code
+          if (member.principal_authored_bills && member.principal_authored_bills.length > 0) {
+            const nameCode = member.principal_authored_bills[0].name_code;
+            if (nameCode) {
+              // Create secondary index: ["people", "byNameCode", nameCode, "information"] -> primaryKey
+              await kv.set(
+                ["people", "byNameCode", nameCode, "information"],
+                primaryKey
+              );
+            }
+          }
 
           indexed++;
         })

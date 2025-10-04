@@ -111,7 +111,7 @@ export const PersonSchema = z
       example: "Dina",
       description: "Nickname or preferred name",
     }),
-    congressMemberships: z.array(z.number()).openapi({
+    congresses: z.array(z.number()).openapi({
       example: [20, 19, 17, 16],
       description: "List of congress numbers where this person was a member",
     }),
@@ -230,3 +230,191 @@ export const PaginatedCommitteesSchema = createPaginatedResponseSchema(
 );
 
 export type PaginatedCommittees = z.infer<typeof PaginatedCommitteesSchema>;
+
+/**
+ * Reading information (first, second, third reading)
+ */
+export const ReadingSchema = z
+  .object({
+    id: z.number().openapi({
+      example: 2,
+      description: "Reading record ID",
+    }),
+    congress: z.number().openapi({
+      example: 20,
+      description: "Congress number",
+    }),
+    billNo: z.string().openapi({
+      example: "HB00001",
+      description: "Bill number",
+    }),
+    report: z.string().optional().openapi({
+      example: "Committee Report No. 123",
+      description: "Committee report number",
+    }),
+    referral: z.string().optional().openapi({
+      example: "E505",
+      description: "Committee referral code",
+    }),
+    refName: z.string().optional().openapi({
+      example: "AGRICULTURE AND FOOD",
+      description: "Committee name",
+    }),
+    dateRead: z.string().optional().openapi({
+      example: "2025-07-29",
+      description: "Date of reading",
+    }),
+  })
+  .openapi("Reading");
+
+export type Reading = z.infer<typeof ReadingSchema>;
+
+/**
+ * Referral information
+ */
+export const ReferralSchema = z
+  .object({
+    committee: z.string().openapi({
+      example: "AGRICULTURE AND FOOD",
+      description: "Committee name",
+    }),
+    sequence: z.string().openapi({
+      example: "1.0",
+      description: "Referral sequence number",
+    }),
+  })
+  .openapi("Referral");
+
+export type Referral = z.infer<typeof ReferralSchema>;
+
+/**
+ * Author information
+ */
+export const AuthorSchema = z
+  .object({
+    keyName: z.string().openapi({
+      example: "ROMUALDEZ, FERDINAND MARTIN G.",
+      description: "Author full name from people cache",
+    }),
+    keyNameCode: z.string().openapi({
+      example: "Romualdez (F.M.)",
+      description: "Author name code",
+    }),
+    personId: z.string().optional().openapi({
+      example: "F061",
+      description: "Person ID from the people index",
+    }),
+    id: z.number().optional().openapi({
+      example: 240,
+      description: "Person database ID",
+    }),
+    lastName: z.string().optional().openapi({
+      example: "ROMUALDEZ",
+      description: "Last name",
+    }),
+    firstName: z.string().optional().openapi({
+      example: "FERDINAND MARTIN",
+      description: "First name",
+    }),
+    middleName: z.string().optional().openapi({
+      example: "G.",
+      description: "Middle name or initial",
+    }),
+    suffix: z.string().nullable().optional().openapi({
+      example: null,
+      description: "Name suffix (e.g., Jr., Sr., III)",
+    }),
+    nickName: z.string().optional().openapi({
+      example: "HON. FERDINAND MARTIN G. ROMUALDEZ",
+      description: "Nickname or preferred name",
+    }),
+    congresses: z.array(z.number()).optional().openapi({
+      example: [20, 19, 18],
+      description: "Congress membership numbers",
+    }),
+  })
+  .openapi("Author");
+
+export type Author = z.infer<typeof AuthorSchema>;
+
+/**
+ * Document/Bill detailed information
+ */
+export const DocumentInfoSchema = z
+  .object({
+    id: z.number().openapi({
+      example: 82865,
+      description: "Unique database ID",
+    }),
+    congress: z.number().openapi({
+      example: 20,
+      description: "Congress number (normalized, e.g., 103 → 20)",
+    }),
+    documentKey: z.string().openapi({
+      example: "HB00001",
+      description: "Bill/document number",
+    }),
+    sessionNumber: z.string().openapi({
+      example: "20-1RS-002",
+      description: "Session number",
+    }),
+    titleFull: z.string().openapi({
+      example: "AN ACT STRENGTHENING THE REGULATORY POWERS...",
+      description: "Full title of the bill",
+    }),
+    titleShort: z.string().openapi({
+      example: "Agricultural Tariffication Act Amendment",
+      description: "Short title of the bill",
+    }),
+    abstract: z.string().openapi({
+      example: "This bill amends Republic Act No. 8178...",
+      description: "Abstract/summary of the bill",
+    }),
+    dateFiled: z.string().openapi({
+      example: "2025-06-30",
+      description: "Date the bill was filed",
+    }),
+    status: z.string().openapi({
+      example: "Referred to the Technical Working Group (TWG) on 2025-08-20",
+      description: "Current status of the bill",
+    }),
+    downloadUrl: z.string().openapi({
+      example: "https://docs.congress.hrep.online/legisdocs/basic_20/HB00001.pdf",
+      description: "URL to download the bill PDF",
+    }),
+    authors: z.array(AuthorSchema).openapi({
+      example: [
+        { keyName: "ROMUALDEZ, FERDINAND MARTIN G.", keyNameCode: "Romualdez (F.M.)" },
+        { keyName: "ACIDRE, JUDE A.", keyNameCode: "Acidre" },
+      ],
+      description: "List of authors",
+    }),
+    coAuthors: z.array(AuthorSchema).openapi({
+      example: [
+        { keyName: "DE VENECIA, MARIA GEORGINA P.", keyNameCode: "De Venecia" },
+        { keyName: "RIVERA, NOEL \"Bong\" N.", keyNameCode: "Rivera" },
+      ],
+      description: "List of co-authors",
+    }),
+    billType: z.string().openapi({
+      example: "House Bill",
+      description: "Type of bill/document",
+    }),
+    significance: z.string().openapi({
+      example: "National",
+      description: "Significance level of the bill",
+    }),
+  })
+  .openapi("DocumentInfo");
+
+export type DocumentInfo = z.infer<typeof DocumentInfoSchema>;
+
+/**
+ * Paginated response for documents
+ */
+export const PaginatedDocumentsSchema = createPaginatedResponseSchema(
+  DocumentInfoSchema,
+  "PaginatedDocuments"
+);
+
+export type PaginatedDocuments = z.infer<typeof PaginatedDocumentsSchema>;

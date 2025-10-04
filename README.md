@@ -35,7 +35,9 @@ irm https://deno.land/install.ps1 | iex
 
 ## API Endpoints
 
-### GET /congresses
+### Public Endpoints
+
+#### GET /congresses
 
 Returns a list of all congresses, sorted by congress number (descending).
 
@@ -55,7 +57,69 @@ Returns a list of all congresses, sorted by congress number (descending).
 
 **Note:** The original API uses ID `103` for the 20th Congress. This is automatically normalized to `20`.
 
-### GET /people
+#### GET /congresses/:congressNumber/documents
+
+Returns a paginated list of bills/documents for a specific congress.
+
+**Path Parameters:**
+- `congressNumber`: Congress number (e.g., `20` for 20th Congress)
+
+**Query Parameters:**
+- `page` (optional): Page number, 0-indexed. Default: `0`
+- `limit` (optional): Items per page. Default: `10`
+- `filter` (optional): Search filter. Default: `""`
+
+**Example:** `GET /congresses/20/documents?page=0&limit=10&filter=education`
+
+**Response:**
+```json
+{
+  "page": 0,
+  "limit": 10,
+  "total": 5234,
+  "totalPages": 524,
+  "data": [
+    {
+      "id": 82865,
+      "congress": 20,
+      "documentKey": "HB00001",
+      "sessionNumber": "20-1RS-002",
+      "titleFull": "AN ACT STRENGTHENING THE REGULATORY POWERS...",
+      "titleShort": "Agricultural Tariffication Act Amendment",
+      "abstract": "This bill amends Republic Act No. 8178...",
+      "dateFiled": "2025-06-30",
+      "status": "Referred to the Technical Working Group (TWG) on 2025-08-20",
+      "downloadUrl": "https://docs.congress.hrep.online/legisdocs/basic_20/HB00001.pdf",
+      "authors": [
+        {
+          "keyName": "ROMUALDEZ, FERDINAND MARTIN G.",
+          "keyNameCode": "Romualdez (F.M.)",
+          "personId": "F061",
+          "id": 240,
+          "lastName": "ROMUALDEZ",
+          "firstName": "FERDINAND MARTIN",
+          "middleName": "G.",
+          "suffix": null,
+          "nickName": "HON. FERDINAND MARTIN G. ROMUALDEZ",
+          "congresses": [20, 19, 18]
+        }
+      ],
+      "coAuthors": [
+        {
+          "keyName": "DE VENECIA, MARIA GEORGINA P.",
+          "keyNameCode": "De Venecia"
+        }
+      ],
+      "billType": "House Bill",
+      "significance": "National"
+    }
+  ]
+}
+```
+
+**Note:** Author information is enriched with person data from the people cache when available. The endpoint fetches directly from the source API without caching.
+
+#### GET /people
 
 Returns a paginated list of house members with their authored bills, co-authored bills, and committees.
 
@@ -110,7 +174,7 @@ Returns a paginated list of house members with their authored bills, co-authored
 }
 ```
 
-### GET /people/:personId
+#### GET /people/:personId
 
 Returns details for a specific house member by their person ID.
 
@@ -135,6 +199,160 @@ Returns details for a specific house member by their person ID.
   "committees": [...]
 }
 ```
+
+#### GET /committees
+
+Returns a paginated list of committees with their information.
+
+**Query Parameters:**
+- `page` (optional): Page number, 0-indexed. Default: `0`
+- `limit` (optional): Items per page. Default: `100`
+
+**Example:** `GET /committees?page=0&limit=10`
+
+**Response:**
+```json
+{
+  "page": 0,
+  "limit": 10,
+  "total": 85,
+  "totalPages": 9,
+  "data": [
+    {
+      "id": 40,
+      "committeeId": "0543",
+      "name": "YOUTH AND SPORTS DEVELOPMENT",
+      "phone": "(02) 8-9514326",
+      "jurisdiction": "All matters directly and principally relating to...",
+      "location": "3rd Floor Ramon V. Mitra Bldg., House of Representatives, Quezon City",
+      "type": "Standing Committees"
+    }
+  ]
+}
+```
+
+### Indexing Endpoints (Protected)
+
+These endpoints require authentication via the `INDEXER_KEY` environment variable.
+
+#### POST /index/people/membership
+
+Indexes people membership data to KV cache from `/house-members/ddl-reference`.
+
+**Request Body:**
+```json
+{
+  "key": "your-indexer-key"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Successfully indexed membership for 1126 people",
+  "indexed": 1126
+}
+```
+
+#### POST /index/people/information
+
+Indexes people information data to KV cache from `/house-members/list`.
+
+**Request Body:**
+```json
+{
+  "key": "your-indexer-key"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Successfully indexed information for 1126 people",
+  "indexed": 1126
+}
+```
+
+#### POST /index/committees/information
+
+Indexes committee information to KV cache from `/committee/list`.
+
+**Request Body:**
+```json
+{
+  "key": "your-indexer-key"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Successfully indexed 85 committees",
+  "indexed": 85
+}
+```
+
+### Cache Inspection Endpoints (Protected)
+
+These endpoints allow you to inspect what's currently in the KV cache. They require authentication via the `INDEXER_KEY` environment variable.
+
+#### POST /cached/people/byFullName
+
+Returns all people cache entries indexed by full name.
+
+**Request Body:**
+```json
+{
+  "key": "your-indexer-key"
+}
+```
+
+**Response:**
+```json
+{
+  "count": 1126,
+  "entries": [
+    {
+      "fullName": "ABAD, HENEDINA R.",
+      "primaryKey": ["people", "byPersonId", "E001", "membership"]
+    },
+    {
+      "fullName": "ACIDRE, JUDE A.",
+      "primaryKey": ["people", "byPersonId", "K119", "membership"]
+    }
+  ]
+}
+```
+
+#### POST /cached/people/byNameCode
+
+Returns all people cache entries indexed by name code.
+
+**Request Body:**
+```json
+{
+  "key": "your-indexer-key"
+}
+```
+
+**Response:**
+```json
+{
+  "count": 1126,
+  "entries": [
+    {
+      "nameCode": "Abad",
+      "primaryKey": ["people", "byPersonId", "E001", "information"]
+    },
+    {
+      "nameCode": "Acidre",
+      "primaryKey": ["people", "byPersonId", "K119", "information"]
+    }
+  ]
+}
+```
+
+**Note:** These endpoints are useful for debugging author lookup issues in `/congresses/:congressNumber/documents`.
 
 ## Development
 

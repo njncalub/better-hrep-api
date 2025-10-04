@@ -119,7 +119,7 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
   const kv = await Deno.openKv();
   const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
   await kv.close();
-  const congressMemberships = membershipEntry.value ?? [];
+  const congresses = membershipEntry.value ?? [];
 
   // Fetch co-authored bills for this member
   let coAuthoredDocuments: Document[] = [];
@@ -162,7 +162,7 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
     middleName: member.middle_name,
     suffix: member.suffix,
     nickName: member.nick_name,
-    congressMemberships,
+    congresses,
     authoredDocuments:
       member.principal_authored_bills?.map((bill) => ({
         congress: mapCongressId(bill.congress),
@@ -317,7 +317,7 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
         middleName: info.middleName,
         suffix: info.suffix,
         nickName: info.nickName,
-        congressMemberships: membershipCongresses,
+        congresses: membershipCongresses,
         authoredDocuments,
         coAuthoredDocuments,
         committees,
