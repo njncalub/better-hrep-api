@@ -4,6 +4,7 @@ import {
   fetchCoAuthoredBills,
   fetchCommitteeMembership,
   fetchBillsSearch,
+  fetchCongressReference,
 } from "../lib/api-client.ts";
 import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
 import { PaginatedPeopleSchema, PersonSchema, type Person, type Document, type Committee } from "../types/api.ts";
@@ -113,12 +114,12 @@ const personByIdRoute = createRoute({
 
 /**
  * Transform source API data to cleaned API format
+ * Also caches document authorship to KV for use in /congresses endpoints
  */
-async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
+async function transformHouseMember(member: HouseMemberItem, latestCongress: number): Promise<Person> {
   // Get congress memberships from cache
   const kv = await Deno.openKv();
   const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
-  await kv.close();
   const congresses = membershipEntry.value ?? [];
 
   // Fetch co-authored bills for this member
@@ -135,6 +136,39 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
     // If co-author endpoint fails, just return empty array
     console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
   }
+
+  // Map authored documents
+  const authoredDocuments: Document[] =
+    member.principal_authored_bills?.map((bill) => ({
+      congress: mapCongressId(bill.congress),
+      documentKey: bill.bill_no,
+    })) ?? [];
+
+  // Cache document authorship for /congresses endpoints
+  // TTL: 5 days for latest congress, no expiration for older congresses
+  const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
+
+  // Cache authored documents
+  for (const doc of authoredDocuments) {
+    const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
+    await kv.set(
+      ["congresses", doc.congress, doc.documentKey, "authors", member.author_id],
+      true,
+      expireIn ? { expireIn } : {}
+    );
+  }
+
+  // Cache co-authored documents
+  for (const doc of coAuthoredDocuments) {
+    const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
+    await kv.set(
+      ["congresses", doc.congress, doc.documentKey, "coAuthors", member.author_id],
+      true,
+      expireIn ? { expireIn } : {}
+    );
+  }
+
+  await kv.close();
 
   // Fetch committee memberships for this member
   let committees: Committee[] = [];
@@ -163,11 +197,7 @@ async function transformHouseMember(member: HouseMemberItem): Promise<Person> {
     suffix: member.suffix,
     nickName: member.nick_name,
     congresses,
-    authoredDocuments:
-      member.principal_authored_bills?.map((bill) => ({
-        congress: mapCongressId(bill.congress),
-        documentKey: bill.bill_no,
-      })) ?? [],
+    authoredDocuments,
     coAuthoredDocuments,
     committees,
   };
@@ -181,13 +211,26 @@ peopleRouter.openapi(peopleRoute, async (c) => {
     const page = pageStr ? parseInt(pageStr, 10) : 0;
     const limit = limitStr ? parseInt(limitStr, 10) : 25;
 
+    // Get latest congress number
+    const congressResponse = await fetchCongressReference();
+    if (!congressResponse.success || !congressResponse.data) {
+      return c.json({ error: "Failed to fetch congress reference" }, 500);
+    }
+    const latestCongress = Math.max(
+      ...congressResponse.data
+        .filter(c => c.id !== 0)
+        .map(c => mapCongressId(c.id))
+    );
+
     const response = await fetchHouseMembers(page, limit);
 
     if (!response.success || !response.data) {
       return c.json({ error: "Failed to fetch house members" }, 500);
     }
 
-    const people = await Promise.all(response.data.rows.map(transformHouseMember));
+    const people = await Promise.all(
+      response.data.rows.map(member => transformHouseMember(member, latestCongress))
+    );
     const totalPages = Math.ceil(response.data.count / limit);
 
     return c.json(
@@ -212,6 +255,18 @@ peopleRouter.openapi(peopleRoute, async (c) => {
 peopleRouter.openapi(personByIdRoute, async (c) => {
   try {
     const { personId } = c.req.valid("param");
+
+    // Get latest congress number
+    const congressResponse = await fetchCongressReference();
+    if (!congressResponse.success || !congressResponse.data) {
+      return c.json({ error: "Failed to fetch congress reference" }, 500);
+    }
+    const latestCongress = Math.max(
+      ...congressResponse.data
+        .filter(c => c.id !== 0)
+        .map(c => mapCongressId(c.id))
+    );
+
     const kv = await Deno.openKv();
 
     // Try to get cached data first
@@ -353,7 +408,7 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
       }
 
       // Transform the member data
-      person = await transformHouseMember(member);
+      person = await transformHouseMember(member, latestCongress);
     }
 
     return c.json(person, 200);

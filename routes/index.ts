@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { fetchHouseMembersDDL, fetchHouseMembers, fetchCommitteeList } from "../lib/api-client.ts";
+import { fetchHouseMembersDDL, fetchHouseMembers, fetchCommitteeList, fetchCoAuthoredBills } from "../lib/api-client.ts";
 import { mapCongressId } from "../lib/congress-mapper.ts";
 
 const INDEXER_KEY = Deno.env.get("INDEXER_KEY")!;
@@ -279,6 +279,24 @@ indexRouter.openapi(indexPeopleInformationRoute, async (c) => {
                 primaryKey
               );
             }
+          }
+
+          // Fetch and cache co-authored documents
+          try {
+            const coAuthorResponse = await fetchCoAuthoredBills(member.author_id);
+            if (coAuthorResponse.success && coAuthorResponse.data?.rows) {
+              const coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
+                congress: mapCongressId(bill.congress),
+                documentKey: bill.bill_no,
+              }));
+
+              await kv.set(
+                ["people", "byPersonId", member.author_id, "coAuthoredDocuments"],
+                coAuthoredDocuments
+              );
+            }
+          } catch (error) {
+            console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
           }
 
           indexed++;

@@ -678,7 +678,7 @@ deno task fetch /committee/list POST '{"page":0,"limit":10}'
 
 ## Automated Indexing
 
-The API includes automated monthly indexing via GitHub Actions to keep the cache updated.
+The API includes automated indexing via GitHub Actions to keep the cache updated.
 
 ### GitHub Secrets Setup
 
@@ -693,19 +693,31 @@ Configure the following secrets in your GitHub repository settings:
 3. Click "New repository secret"
 4. Add both `API_BASE_URL` and `INDEXER_KEY`
 
-### Manual Indexing Trigger
+### Manual Workflow Triggers
 
-You can manually trigger the indexing workflow:
-1. Go to the "Actions" tab in your GitHub repository
-2. Select "Monthly Data Indexing" workflow
-3. Click "Run workflow"
+You can manually trigger workflows from the "Actions" tab:
 
-### Indexing Schedule
+1. **Monthly Data Indexing** - Indexes base data (people, committees)
+2. **Crawl People Pages** - Populates document authorship cache
 
-The workflow runs automatically on the 1st of every month at 2:00 AM UTC. It performs:
+### Indexing Schedules
+
+**Monthly Data Indexing** (Runs on the 1st of every month at 2:00 AM UTC):
 1. Index people membership data
-2. Index people information data
+2. Index people information data (includes co-authored documents)
 3. Index committees information data
+
+**Crawl People Pages** (Runs every 5 days at 3:00 AM UTC):
+- Crawls all pages of `/people` endpoint to populate document authorship cache
+- This keeps the cache fresh for the latest congress (5-day TTL)
+
+### Document Authorship Caching
+
+The `/people` endpoint automatically caches document authorship data on each request:
+- **Cache TTL for latest congress:** 5 days (keeps data fresh)
+- **Cache TTL for older congresses:** No expiration (historical data doesn't change)
+- **Cache keys:** `["congresses", congress, documentKey, "authors"|"coAuthors", personId]`
+- **Used by:** `/congresses/{congressNumber}/documents` for consistent author/coauthor data
 
 ## Impostor Syndrome Disclaimer
 

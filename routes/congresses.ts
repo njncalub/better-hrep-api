@@ -110,132 +110,70 @@ const congressDocumentsRoute = createRoute({
 
 /**
  * Helper function to transform author/coauthor data with person information
+ * Looks up person by personId directly
  */
 async function transformAuthor(
   kv: Deno.Kv,
-  author: { name: string; name_code: string }
+  personId: string
 ) {
-  // Try to find by name_code first
-  const nameCodeIndexResult = await kv.get([
+  const personInfoResult = await kv.get([
     "people",
-    "byNameCode",
-    author.name_code,
+    "byPersonId",
+    personId,
     "information",
   ]);
 
-  if (nameCodeIndexResult.value) {
-    // Secondary index contains the primary key to information
-    const infoPrimaryKey = nameCodeIndexResult.value as string[];
+  if (personInfoResult.value) {
+    const personInfo = personInfoResult.value as {
+      id: number;
+      lastName: string;
+      firstName: string;
+      middleName: string;
+      suffix: string | null;
+      nickName: string;
+    };
 
-    // Get the author_id from the primary key
-    const authorId = infoPrimaryKey[2] as string;
-
-    // Fetch person information
-    const personInfoResult = await kv.get(infoPrimaryKey);
-
-    if (personInfoResult.value) {
-      const personInfo = personInfoResult.value as {
-        id: number;
-        lastName: string;
-        firstName: string;
-        middleName: string;
-        suffix: string | null;
-        nickName: string;
-      };
-
-      // Fetch membership data
-      const membershipResult = await kv.get([
-        "people",
-        "byPersonId",
-        authorId,
-        "membership",
-      ]);
-      const membership = membershipResult.value as number[] || [];
-
-      return {
-        keyName: author.name, // Use name from bill data
-        keyNameCode: author.name_code,
-        personId: authorId,
-        ...personInfo,
-        congresses: membership,
-      };
-    }
-  }
-
-  // Fallback: Try to find by fullname
-  const secondaryIndexResult = await kv.get([
-    "people",
-    "byPersonFullName",
-    author.name,
-    "membership",
-  ]);
-
-  if (secondaryIndexResult.value) {
-    // Secondary index contains the primary key
-    const primaryKey = secondaryIndexResult.value as string[];
-
-    // Fetch the actual membership data from the primary key
-    const membershipResult = await kv.get(primaryKey);
-    const membership = membershipResult.value as number[];
-
-    // Get the author_id from the primary key
-    const authorId = primaryKey[2] as string;
-
-    // Fetch person information
-    const personInfoResult = await kv.get([
+    // Fetch membership data
+    const membershipResult = await kv.get([
       "people",
       "byPersonId",
-      authorId,
-      "information",
+      personId,
+      "membership",
     ]);
+    const membership = membershipResult.value as number[] || [];
 
-    if (personInfoResult.value) {
-      const personInfo = personInfoResult.value as {
-        id: number;
-        lastName: string;
-        firstName: string;
-        middleName: string;
-        suffix: string | null;
-        nickName: string;
-      };
-
-      return {
-        keyName: secondaryIndexResult.key[2] as string, // fullname from cache
-        keyNameCode: author.name_code,
-        personId: authorId,
-        ...personInfo,
-        congresses: membership,
-      };
-    }
+    return {
+      personId,
+      ...personInfo,
+      congresses: membership,
+    };
   }
 
-  // Final fallback if not found in cache at all
-  return {
-    keyName: author.name,
-    keyNameCode: author.name_code,
-  };
+  // If personId lookup fails, return null (will be filtered out)
+  return null;
 }
 
 /**
  * Transform source BillListItem to DocumentInfo
- * Note: This is async now because it needs to verify author names against KV
+ * Note: Uses KV cache for consistent author/coauthor data
  */
-async function transformBillToDocument(bill: BillListItem): Promise<DocumentInfo> {
+async function transformBillToDocument(
+  bill: BillListItem,
+  kv: Deno.Kv,
+  authorPersonIds: string[],
+  coAuthorPersonIds: string[]
+): Promise<DocumentInfo> {
   const normalizedCongress = mapCongressId(bill.congress);
 
-  const kv = await Deno.openKv();
-
-  // Build authors array from the authors field
+  // Build authors array from cached person IDs
   const authors = await Promise.all(
-    (bill.authors || []).map((author) => transformAuthor(kv, author))
+    authorPersonIds.map((personId) => transformAuthor(kv, personId))
   );
 
-  // Build coAuthors array from the coauthors field
+  // Build coAuthors array from cached person IDs
   const coAuthors = await Promise.all(
-    (bill.coauthors || []).map((coauthor) => transformAuthor(kv, coauthor))
+    coAuthorPersonIds.map((personId) => transformAuthor(kv, personId))
   );
-
-  kv.close();
 
   return {
     id: bill.id,
@@ -248,8 +186,8 @@ async function transformBillToDocument(bill: BillListItem): Promise<DocumentInfo
     dateFiled: bill.date_filed,
     status: bill.status,
     downloadUrl: bill.text_as_filed,
-    authors,
-    coAuthors,
+    authors: authors.filter((a): a is NonNullable<typeof a> => a !== null),
+    coAuthors: coAuthors.filter((a): a is NonNullable<typeof a> => a !== null),
     billType: bill.bill_type,
     significance: bill.significance_desc,
   };
@@ -299,10 +237,42 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
       return c.json({ error: "Failed to fetch bills from source API" }, 500);
     }
 
-    // Transform bills to documents
+    const kv = await Deno.openKv();
+
+    // For each bill, get authors and coAuthors from KV cache
     const documents = await Promise.all(
-      response.data.rows.map(bill => transformBillToDocument(bill))
+      response.data.rows.map(async (bill) => {
+        // List all authors for this document
+        const authorsIter = kv.list({
+          prefix: ["congresses", congressNum, bill.bill_no, "authors"]
+        });
+        const authorPersonIds: string[] = [];
+        for await (const entry of authorsIter) {
+          if (entry.value === true) {
+            // Key format: ["congresses", congress, documentKey, "authors", personId]
+            const personId = entry.key[4] as string;
+            authorPersonIds.push(personId);
+          }
+        }
+
+        // List all coAuthors for this document
+        const coAuthorsIter = kv.list({
+          prefix: ["congresses", congressNum, bill.bill_no, "coAuthors"]
+        });
+        const coAuthorPersonIds: string[] = [];
+        for await (const entry of coAuthorsIter) {
+          if (entry.value === true) {
+            // Key format: ["congresses", congress, documentKey, "coAuthors", personId]
+            const personId = entry.key[4] as string;
+            coAuthorPersonIds.push(personId);
+          }
+        }
+
+        return transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds);
+      })
     );
+
+    await kv.close();
 
     const total = response.data.count;
     const totalPages = Math.ceil(total / limitNum);

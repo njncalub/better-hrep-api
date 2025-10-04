@@ -292,43 +292,35 @@ export type Referral = z.infer<typeof ReferralSchema>;
  */
 export const AuthorSchema = z
   .object({
-    keyName: z.string().openapi({
-      example: "ROMUALDEZ, FERDINAND MARTIN G.",
-      description: "Author full name from people cache",
-    }),
-    keyNameCode: z.string().openapi({
-      example: "Romualdez (F.M.)",
-      description: "Author name code",
-    }),
-    personId: z.string().optional().openapi({
+    personId: z.string().openapi({
       example: "F061",
       description: "Person ID from the people index",
     }),
-    id: z.number().optional().openapi({
+    id: z.number().openapi({
       example: 240,
       description: "Person database ID",
     }),
-    lastName: z.string().optional().openapi({
+    lastName: z.string().openapi({
       example: "ROMUALDEZ",
       description: "Last name",
     }),
-    firstName: z.string().optional().openapi({
+    firstName: z.string().openapi({
       example: "FERDINAND MARTIN",
       description: "First name",
     }),
-    middleName: z.string().optional().openapi({
+    middleName: z.string().openapi({
       example: "G.",
       description: "Middle name or initial",
     }),
-    suffix: z.string().nullable().optional().openapi({
+    suffix: z.string().nullable().openapi({
       example: null,
       description: "Name suffix (e.g., Jr., Sr., III)",
     }),
-    nickName: z.string().optional().openapi({
+    nickName: z.string().openapi({
       example: "HON. FERDINAND MARTIN G. ROMUALDEZ",
       description: "Nickname or preferred name",
     }),
-    congresses: z.array(z.number()).optional().openapi({
+    congresses: z.array(z.number()).openapi({
       example: [20, 19, 18],
       description: "Congress membership numbers",
     }),

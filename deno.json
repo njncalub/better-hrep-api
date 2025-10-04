@@ -6,7 +6,8 @@
   "tasks": {
     "start": "deno run -A --unstable-kv --watch main.ts",
     "fetch": "deno run --allow-net --allow-env --allow-read scripts/fetch-api.ts",
-    "parse-metadata": "deno run --allow-read --allow-write scripts/parse-metadata.ts"
+    "parse-metadata": "deno run --allow-read --allow-write scripts/parse-metadata.ts",
+    "crawl:people": "deno run --allow-read --allow-net --allow-env scripts/crawl-people.ts"
   },
   "compilerOptions": {
     "jsx": "precompile",

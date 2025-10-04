@@ -1,0 +1,71 @@
+name: Crawl People Pages
+
+on:
+  schedule:
+    # Run every 5 days at 3:00 AM UTC
+    - cron: '0 3 */5 * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  crawl-people:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Crawl All People Pages
+        run: |
+          # Install Deno
+          curl -fsSL https://deno.land/install.sh | sh
+          export DENO_INSTALL="$HOME/.deno"
+          export PATH="$DENO_INSTALL/bin:$PATH"
+
+          # Run the people crawler
+          API_BASE_URL="${{ secrets.API_BASE_URL }}" deno run --allow-net --allow-env - <<'EOF'
+          const API_BASE_URL = Deno.env.get("API_BASE_URL") || "http://localhost:8000";
+          let page = 0;
+          const limit = 100;
+          let totalProcessed = 0;
+
+          console.log("Starting /people crawler...");
+          console.log(`API Base URL: ${API_BASE_URL}`);
+
+          while (true) {
+            console.log(`\nFetching page ${page}...`);
+            const url = `${API_BASE_URL}/people?page=${page}&limit=${limit}`;
+
+            try {
+              const response = await fetch(url);
+              if (!response.ok) {
+                console.error(`Failed to fetch page ${page}: ${response.status}`);
+                break;
+              }
+
+              const data = await response.json();
+              const peopleCount = data.data?.length || 0;
+              totalProcessed += peopleCount;
+
+              console.log(`  Processed ${peopleCount} people (total: ${totalProcessed}/${data.total})`);
+
+              if (page >= data.totalPages - 1) {
+                console.log("\nReached last page!");
+                break;
+              }
+
+              page++;
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (error) {
+              console.error(`Error fetching page ${page}:`, error);
+              break;
+            }
+          }
+
+          console.log(`\nCrawling complete! Total people processed: ${totalProcessed}`);
+          console.log("Document authorship cache has been populated.");
+          EOF
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ People crawler completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ People crawler failed"
