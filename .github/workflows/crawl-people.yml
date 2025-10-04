@@ -22,7 +22,7 @@ jobs:
       - name: Crawl All People Pages
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
-        run: deno run --allow-net --allow-env scripts/crawl-people.ts
+        run: deno run --allow-net --allow-env --allow-read scripts/crawl-people.ts
 
       - name: Notify Success
         if: success()

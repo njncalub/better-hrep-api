@@ -1,11 +1,16 @@
-#!/usr/bin/env -S deno run --allow-net --allow-env
+#!/usr/bin/env -S deno run --allow-net --allow-env --allow-read
 
 /**
  * Script to crawl all pages of /people endpoint
  * This populates the document authorship cache by requesting each page
  */
 
-import "jsr:@std/dotenv/load";
+// Only load .env if running locally (file exists)
+try {
+  await import("jsr:@std/dotenv/load");
+} catch {
+  // Ignore if .env doesn't exist (e.g., in CI)
+}
 
 const API_BASE_URL = Deno.env.get("API_BASE_URL") || "http://localhost:8000";
 
