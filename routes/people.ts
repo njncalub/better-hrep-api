@@ -116,12 +116,9 @@ const personByIdRoute = createRoute({
  * Transform source API data to cleaned API format
  * Also caches document authorship to KV for use in /congresses endpoints
  */
-async function transformHouseMember(member: HouseMemberItem, latestCongress: number): Promise<Person> {
-  let kv: Deno.Kv | null = null;
-
+async function transformHouseMember(member: HouseMemberItem, latestCongress: number, kv: Deno.Kv): Promise<Person> {
   try {
     // Get congress memberships from cache
-    kv = await Deno.openKv();
     const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
     const congresses = membershipEntry.value ?? [];
 
@@ -209,11 +206,6 @@ async function transformHouseMember(member: HouseMemberItem, latestCongress: num
   } catch (error) {
     console.error(`Error transforming member ${member.author_id}:`, error);
     throw error;
-  } finally {
-    // Always close KV connection
-    if (kv) {
-      await kv.close();
-    }
   }
 }
 
@@ -242,29 +234,37 @@ peopleRouter.openapi(peopleRoute, async (c) => {
       return c.json({ error: "Failed to fetch house members" }, 500);
     }
 
-    // Process members sequentially to avoid overwhelming the system
-    const people: Person[] = [];
-    for (const member of response.data.rows) {
-      try {
-        const person = await transformHouseMember(member, latestCongress);
-        people.push(person);
-      } catch (error) {
-        console.error(`Failed to transform member ${member.author_id}, skipping:`, error);
-        // Continue processing other members even if one fails
-      }
-    }
-    const totalPages = Math.ceil(response.data.count / limit);
+    // Open single KV connection for the entire batch
+    const kv = await Deno.openKv();
 
-    return c.json(
-      {
-        page,
-        limit,
-        total: response.data.count,
-        totalPages,
-        data: people,
-      },
-      200
-    );
+    try {
+      // Process members sequentially to avoid overwhelming the system
+      const people: Person[] = [];
+      for (const member of response.data.rows) {
+        try {
+          const person = await transformHouseMember(member, latestCongress, kv);
+          people.push(person);
+        } catch (error) {
+          console.error(`Failed to transform member ${member.author_id}, skipping:`, error);
+          // Continue processing other members even if one fails
+        }
+      }
+      const totalPages = Math.ceil(response.data.count / limit);
+
+      return c.json(
+        {
+          page,
+          limit,
+          total: response.data.count,
+          totalPages,
+          data: people,
+        },
+        200
+      );
+    } finally {
+      // Always close KV connection
+      await kv.close();
+    }
   } catch (error) {
     console.error("Error fetching house members:", error);
     return c.json(
@@ -430,7 +430,7 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
       }
 
       // Transform the member data
-      person = await transformHouseMember(member, latestCongress);
+      person = await transformHouseMember(member, latestCongress, kv);
     }
 
     return c.json(person, 200);
