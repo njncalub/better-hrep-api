@@ -223,7 +223,7 @@ peopleRouter.openapi(peopleRoute, async (c) => {
   try {
     const { page: pageStr, limit: limitStr } = c.req.valid("query");
     const page = pageStr ? parseInt(pageStr, 10) : 0;
-    const limit = limitStr ? parseInt(limitStr, 10) : 25;
+    const limit = Math.min(limitStr ? parseInt(limitStr, 10) : 10, 25); // Cap at 25 max
 
     // Get latest congress number
     const congressResponse = await fetchCongressReference();
@@ -242,9 +242,17 @@ peopleRouter.openapi(peopleRoute, async (c) => {
       return c.json({ error: "Failed to fetch house members" }, 500);
     }
 
-    const people = await Promise.all(
-      response.data.rows.map(member => transformHouseMember(member, latestCongress))
-    );
+    // Process members sequentially to avoid overwhelming the system
+    const people: Person[] = [];
+    for (const member of response.data.rows) {
+      try {
+        const person = await transformHouseMember(member, latestCongress);
+        people.push(person);
+      } catch (error) {
+        console.error(`Failed to transform member ${member.author_id}, skipping:`, error);
+        // Continue processing other members even if one fails
+      }
+    }
     const totalPages = Math.ceil(response.data.count / limit);
 
     return c.json(
