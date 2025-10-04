@@ -14,7 +14,7 @@ async function crawlPeople() {
   console.log(`API Base URL: ${API_BASE_URL}`);
 
   let page = 0;
-  const limit = 100; // Process 100 people per page
+  const limit = 25; // Process 25 people per page
   let totalProcessed = 0;
 
   while (true) {

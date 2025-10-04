@@ -92,8 +92,6 @@ Returns a paginated list of bills/documents for a specific congress.
       "downloadUrl": "https://docs.congress.hrep.online/legisdocs/basic_20/HB00001.pdf",
       "authors": [
         {
-          "keyName": "ROMUALDEZ, FERDINAND MARTIN G.",
-          "keyNameCode": "Romualdez (F.M.)",
           "personId": "F061",
           "id": 240,
           "lastName": "ROMUALDEZ",
@@ -106,8 +104,14 @@ Returns a paginated list of bills/documents for a specific congress.
       ],
       "coAuthors": [
         {
-          "keyName": "DE VENECIA, MARIA GEORGINA P.",
-          "keyNameCode": "De Venecia"
+          "personId": "D028",
+          "id": 156,
+          "lastName": "DE VENECIA",
+          "firstName": "MARIA GEORGINA",
+          "middleName": "P.",
+          "suffix": null,
+          "nickName": "GINA",
+          "congresses": [20, 19]
         }
       ],
       "billType": "House Bill",
@@ -117,7 +121,7 @@ Returns a paginated list of bills/documents for a specific congress.
 }
 ```
 
-**Note:** Author information is enriched with person data from the people cache when available. The endpoint fetches directly from the source API without caching.
+**Note:** Author/co-author information comes from the document authorship cache, which is populated by the `/people` endpoint. This ensures consistent author data across all documents. The endpoint fetches bill data from the source API and enriches it with cached authorship information.
 
 #### GET /people
 
