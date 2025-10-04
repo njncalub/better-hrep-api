@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { fetchCongressReference, fetchBillsList } from "../lib/api-client.ts";
 import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
+import { openKv } from "../lib/kv.ts";
 import { CongressListSchema, type Congress, PaginatedDocumentsSchema, type DocumentInfo, type Reading, type Referral } from "../types/api.ts";
 import type { CongressReferenceItem, BillListItem } from "../types/source.ts";
 
@@ -237,7 +238,7 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
       return c.json({ error: "Failed to fetch bills from source API" }, 500);
     }
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
 
     // For each bill, get authors and coAuthors from KV cache
     const documents = await Promise.all(

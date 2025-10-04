@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { fetchHouseMembersDDL, fetchHouseMembers, fetchCommitteeList, fetchCoAuthoredBills } from "../lib/api-client.ts";
 import { mapCongressId } from "../lib/congress-mapper.ts";
+import { openKv } from "../lib/kv.ts";
 
 const INDEXER_KEY = Deno.env.get("INDEXER_KEY")!;
 
@@ -176,7 +177,7 @@ indexRouter.openapi(indexPeopleMembershipRoute, async (c) => {
       return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
     }
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
     const response = await fetchHouseMembersDDL();
 
     if (!response.success || !response.data) {
@@ -190,25 +191,29 @@ indexRouter.openapi(indexPeopleMembershipRoute, async (c) => {
     for (let i = 0; i < response.data.length; i += batchSize) {
       const batch = response.data.slice(i, i + batchSize);
 
-      await Promise.all(
-        batch.map(async (member) => {
-          // Normalize congress IDs (103 → 20)
-          const normalizedMembership = member.membership.map(mapCongressId);
+      // Use atomic operation to batch all writes for this batch
+      const atomic = kv.atomic();
 
-          const primaryKey = ["people", "byPersonId", member.author_id, "membership"];
+      for (const member of batch) {
+        // Normalize congress IDs (103 → 20)
+        const normalizedMembership = member.membership.map(mapCongressId);
 
-          // Set the primary key
-          await kv.set(primaryKey, normalizedMembership);
+        const primaryKey = ["people", "byPersonId", member.author_id, "membership"];
 
-          // Set the secondary index by full name - stores the primary key
-          await kv.set(
-            ["people", "byPersonFullName", member.fullname, "membership"],
-            primaryKey
-          );
+        // Set the primary key
+        atomic.set(primaryKey, normalizedMembership);
 
-          indexed++;
-        })
-      );
+        // Set the secondary index by full name - stores the primary key
+        atomic.set(
+          ["people", "byPersonFullName", member.fullname, "membership"],
+          primaryKey
+        );
+
+        indexed++;
+      }
+
+      // Commit all writes in a single operation
+      await atomic.commit();
     }
 
     kv.close();
@@ -238,7 +243,7 @@ indexRouter.openapi(indexPeopleInformationRoute, async (c) => {
       return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
     }
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
     let indexed = 0;
     let page = 0;
     const limit = 100;
@@ -252,56 +257,68 @@ indexRouter.openapi(indexPeopleInformationRoute, async (c) => {
         return c.json({ error: "Failed to fetch house members" }, 500);
       }
 
-      // Batch index members' information in parallel
-      await Promise.all(
+      // Fetch co-authored bills first (needs API calls, can't be in atomic)
+      const membersWithCoAuthored = await Promise.all(
         response.data.rows.map(async (member) => {
-          const info = {
-            id: member.id,
-            lastName: member.last_name,
-            firstName: member.first_name,
-            middleName: member.middle_name,
-            suffix: member.suffix,
-            nickName: member.nick_name,
-          };
-
-          const primaryKey = ["people", "byPersonId", member.author_id, "information"];
-
-          // Store to KV with key: ["people", "byPersonId", authorId, "information"]
-          await kv.set(primaryKey, info);
-
-          // If member has principal_authored_bills, create secondary index by name_code
-          if (member.principal_authored_bills && member.principal_authored_bills.length > 0) {
-            const nameCode = member.principal_authored_bills[0].name_code;
-            if (nameCode) {
-              // Create secondary index: ["people", "byNameCode", nameCode, "information"] -> primaryKey
-              await kv.set(
-                ["people", "byNameCode", nameCode, "information"],
-                primaryKey
-              );
-            }
-          }
-
-          // Fetch and cache co-authored documents
+          let coAuthoredDocuments = null;
           try {
             const coAuthorResponse = await fetchCoAuthoredBills(member.author_id);
             if (coAuthorResponse.success && coAuthorResponse.data?.rows) {
-              const coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
+              coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
                 congress: mapCongressId(bill.congress),
                 documentKey: bill.bill_no,
               }));
-
-              await kv.set(
-                ["people", "byPersonId", member.author_id, "coAuthoredDocuments"],
-                coAuthoredDocuments
-              );
             }
           } catch (error) {
             console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
           }
-
-          indexed++;
+          return { member, coAuthoredDocuments };
         })
       );
+
+      // Use atomic operation to batch all KV writes
+      const atomic = kv.atomic();
+
+      for (const { member, coAuthoredDocuments } of membersWithCoAuthored) {
+        const info = {
+          id: member.id,
+          lastName: member.last_name,
+          firstName: member.first_name,
+          middleName: member.middle_name,
+          suffix: member.suffix,
+          nickName: member.nick_name,
+        };
+
+        const primaryKey = ["people", "byPersonId", member.author_id, "information"];
+
+        // Store to KV with key: ["people", "byPersonId", authorId, "information"]
+        atomic.set(primaryKey, info);
+
+        // If member has principal_authored_bills, create secondary index by name_code
+        if (member.principal_authored_bills && member.principal_authored_bills.length > 0) {
+          const nameCode = member.principal_authored_bills[0].name_code;
+          if (nameCode) {
+            // Create secondary index: ["people", "byNameCode", nameCode, "information"] -> primaryKey
+            atomic.set(
+              ["people", "byNameCode", nameCode, "information"],
+              primaryKey
+            );
+          }
+        }
+
+        // Cache co-authored documents if available
+        if (coAuthoredDocuments) {
+          atomic.set(
+            ["people", "byPersonId", member.author_id, "coAuthoredDocuments"],
+            coAuthoredDocuments
+          );
+        }
+
+        indexed++;
+      }
+
+      // Commit all writes in a single operation
+      await atomic.commit();
 
       // Check if we've processed all pages
       const totalPages = Math.ceil(response.data.count / limit);
@@ -339,7 +356,7 @@ indexRouter.openapi(indexCommitteesInformationRoute, async (c) => {
       return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
     }
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
     let indexed = 0;
     let page = 0;
     const limit = 100;
@@ -353,39 +370,37 @@ indexRouter.openapi(indexCommitteesInformationRoute, async (c) => {
         return c.json({ error: "Failed to fetch committees" }, 500);
       }
 
-      // Batch writes for better performance
-      const batchSize = 50;
-      for (let i = 0; i < response.data.rows.length; i += batchSize) {
-        const batch = response.data.rows.slice(i, i + batchSize);
+      // Use atomic operation to batch all KV writes
+      const atomic = kv.atomic();
 
-        await Promise.all(
-          batch.map(async (committee) => {
-            // Skip committees without a code
-            if (!committee.code) {
-              console.warn("Skipping committee without code:", committee.name);
-              return;
-            }
+      for (const committee of response.data.rows) {
+        // Skip committees without a code
+        if (!committee.code) {
+          console.warn("Skipping committee without code:", committee.name);
+          continue;
+        }
 
-            const info = {
-              id: committee.id,
-              code: committee.code.trim(),
-              name: committee.name.trim(),
-              phone: committee.phone?.trim() || null,
-              jurisdiction: committee.jurisdiction?.trim() || null,
-              location: committee.location?.trim() || null,
-              type_desc: committee.type_desc.trim(),
-            };
+        const info = {
+          id: committee.id,
+          code: committee.code.trim(),
+          name: committee.name.trim(),
+          phone: committee.phone?.trim() || null,
+          jurisdiction: committee.jurisdiction?.trim() || null,
+          location: committee.location?.trim() || null,
+          type_desc: committee.type_desc.trim(),
+        };
 
-            // Store to KV with key: ["committees", "byCommitteeId", code, "information"]
-            await kv.set(
-              ["committees", "byCommitteeId", committee.code, "information"],
-              info
-            );
-
-            indexed++;
-          })
+        // Store to KV with key: ["committees", "byCommitteeId", code, "information"]
+        atomic.set(
+          ["committees", "byCommitteeId", committee.code, "information"],
+          info
         );
+
+        indexed++;
       }
+
+      // Commit all writes in a single operation
+      await atomic.commit();
 
       // Check if we've processed all pages
       const totalPages = Math.ceil(response.data.count / limit);

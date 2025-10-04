@@ -19,7 +19,7 @@ async function crawlPeople() {
   console.log(`API Base URL: ${API_BASE_URL}`);
 
   let page = 0;
-  const limit = 10; // Process 10 people per page to avoid overwhelming the API
+  const limit = 25; // Process 25 people per page
   let totalProcessed = 0;
 
   while (true) {
@@ -49,9 +49,6 @@ async function crawlPeople() {
       }
 
       page++;
-
-      // Add a small delay to avoid overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 100));
 
     } catch (error) {
       console.error(`Error fetching page ${page}:`, error);

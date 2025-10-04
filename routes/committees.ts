@@ -3,6 +3,7 @@ import {
   CommitteeInfoSchema,
   PaginatedCommitteesSchema,
 } from "../types/api.ts";
+import { openKv } from "../lib/kv.ts";
 
 const committeeListRoute = createRoute({
   method: "get",
@@ -96,7 +97,7 @@ committeesRouter.openapi(committeeListRoute, async (c) => {
   const limitNum = parseInt(limit, 10);
 
   try {
-    const kv = await Deno.openKv();
+    const kv = await openKv();
 
     // Get all committee keys from KV
     const entries = kv.list<{
@@ -157,7 +158,7 @@ committeesRouter.openapi(committeeByIdRoute, async (c) => {
   const { committeeId } = c.req.valid("param");
 
   try {
-    const kv = await Deno.openKv();
+    const kv = await openKv();
 
     const entry = await kv.get<{
       id: number;

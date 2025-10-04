@@ -7,6 +7,7 @@ import {
   fetchCongressReference,
 } from "../lib/api-client.ts";
 import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
+import { openKv } from "../lib/kv.ts";
 import { PaginatedPeopleSchema, PersonSchema, type Person, type Document, type Committee } from "../types/api.ts";
 import type { HouseMemberItem } from "../types/source.ts";
 
@@ -144,15 +145,18 @@ async function transformHouseMember(member: HouseMemberItem, latestCongress: num
         documentKey: bill.bill_no,
       })) ?? [];
 
-    // Cache document authorship for /congresses endpoints
+    // Cache document authorship for /congresses endpoints using atomic batch operations
     // TTL: 5 days for latest congress, no expiration for older congresses
     const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
-    // Cache authored documents
     try {
+      // Batch all writes into a single atomic operation
+      const atomic = kv.atomic();
+
+      // Cache authored documents
       for (const doc of authoredDocuments) {
         const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
-        await kv.set(
+        atomic.set(
           ["congresses", doc.congress, doc.documentKey, "authors", member.author_id],
           true,
           expireIn ? { expireIn } : {}
@@ -162,12 +166,15 @@ async function transformHouseMember(member: HouseMemberItem, latestCongress: num
       // Cache co-authored documents
       for (const doc of coAuthoredDocuments) {
         const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
-        await kv.set(
+        atomic.set(
           ["congresses", doc.congress, doc.documentKey, "coAuthors", member.author_id],
           true,
           expireIn ? { expireIn } : {}
         );
       }
+
+      // Commit all writes in a single operation
+      await atomic.commit();
     } catch (error) {
       console.error(`Failed to cache documents for ${member.author_id}:`, error);
     }
@@ -215,7 +222,7 @@ peopleRouter.openapi(peopleRoute, async (c) => {
   try {
     const { page: pageStr, limit: limitStr } = c.req.valid("query");
     const page = pageStr ? parseInt(pageStr, 10) : 0;
-    const limit = Math.min(limitStr ? parseInt(limitStr, 10) : 10, 25); // Cap at 25 max
+    const limit = limitStr ? parseInt(limitStr, 10) : 10;
 
     // Get latest congress number
     const congressResponse = await fetchCongressReference();
@@ -235,7 +242,7 @@ peopleRouter.openapi(peopleRoute, async (c) => {
     }
 
     // Open single KV connection for the entire batch
-    const kv = await Deno.openKv();
+    const kv = await openKv();
 
     try {
       // Process members sequentially to avoid overwhelming the system
@@ -289,7 +296,7 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
         .map(c => mapCongressId(c.id))
     );
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
 
     // Try to get cached data first
     const infoEntry = await kv.get<{
@@ -311,7 +318,7 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
       const info = infoEntry.value;
 
       // Get membership from cache (need this to query bills by congress)
-      const kv2 = await Deno.openKv();
+      const kv2 = await openKv();
       const membershipEntry = await kv2.get<number[]>(["people", "byPersonId", personId, "membership"]);
       await kv2.close();
 

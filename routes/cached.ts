@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { openKv } from "../lib/kv.ts";
 
 const INDEXER_KEY = Deno.env.get("INDEXER_KEY")!;
 
@@ -130,7 +131,7 @@ cachedRouter.openapi(cachedByFullNameRoute, async (c) => {
       return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
     }
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
     const entries: { fullName: string; primaryKey: string[] }[] = [];
 
     // List all entries with the prefix ["people", "byPersonFullName"]
@@ -170,7 +171,7 @@ cachedRouter.openapi(cachedByNameCodeRoute, async (c) => {
       return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
     }
 
-    const kv = await Deno.openKv();
+    const kv = await openKv();
     const entries: { nameCode: string; primaryKey: string[] }[] = [];
 
     // List all entries with the prefix ["people", "byNameCode"]
