@@ -65,6 +65,7 @@ const cachedByFullNameRoute = createRoute({
   tags: ["Cached"],
   summary: "Get people cache by full name index",
   description: "Returns all people cache entries indexed by full name with their primary keys. Requires valid indexer key.",
+  hide: true,
 });
 
 const cachedByNameCodeRoute = createRoute({
@@ -118,6 +119,7 @@ const cachedByNameCodeRoute = createRoute({
   tags: ["Cached"],
   summary: "Get people cache by name code index",
   description: "Returns all people cache entries indexed by name code with their primary keys. Requires valid indexer key.",
+  hide: true,
 });
 
 export const cachedRouter = new OpenAPIHono();

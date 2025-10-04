@@ -11,23 +11,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Index People Membership Data
-        run: |
-          curl -X POST ${{ secrets.API_BASE_URL }}/index/people/membership \
-            -H "Content-Type: application/json" \
-            -d '{"key": "${{ secrets.INDEXER_KEY }}"}'
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Index People Information Data
-        run: |
-          curl -X POST ${{ secrets.API_BASE_URL }}/index/people/information \
-            -H "Content-Type: application/json" \
-            -d '{"key": "${{ secrets.INDEXER_KEY }}"}'
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
-      - name: Index Committees Information Data
+      - name: Run Monthly Indexing
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
         run: |
-          curl -X POST ${{ secrets.API_BASE_URL }}/index/committees/information \
-            -H "Content-Type: application/json" \
-            -d '{"key": "${{ secrets.INDEXER_KEY }}"}'
+          deno run --allow-net --allow-env --allow-read scripts/seed.ts people-membership
+          deno run --allow-net --allow-env --allow-read scripts/seed.ts people-information
+          deno run --allow-net --allow-env --allow-read scripts/seed.ts committees-information
 
       - name: Notify Success
         if: success()
