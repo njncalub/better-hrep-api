@@ -123,6 +123,60 @@ Returns a paginated list of bills/documents for a specific congress.
 
 **Note:** Author/co-author information comes from the document authorship cache, which is populated by the `/people` endpoint. This ensures consistent author data across all documents. The endpoint fetches bill data from the source API and enriches it with cached authorship information.
 
+#### GET /congresses/:congressNumber/documents/:documentKey
+
+Returns details for a specific bill/document.
+
+**Path Parameters:**
+- `congressNumber`: Congress number (e.g., `20` for 20th Congress)
+- `documentKey`: Document key (e.g., `HB00001`)
+
+**Example:** `GET /congresses/20/documents/HB00001`
+
+**Response:**
+```json
+{
+  "id": 82865,
+  "congress": 20,
+  "documentKey": "HB00001",
+  "sessionNumber": "20-1RS-002",
+  "titleFull": "AN ACT STRENGTHENING THE REGULATORY POWERS...",
+  "titleShort": "Agricultural Tariffication Act Amendment",
+  "abstract": "This bill amends Republic Act No. 8178...",
+  "dateFiled": "2025-06-30",
+  "status": "Referred to the Technical Working Group (TWG) on 2025-08-20",
+  "downloadUrl": "https://docs.congress.hrep.online/legisdocs/basic_20/HB00001.pdf",
+  "authors": [
+    {
+      "personId": "F061",
+      "id": 240,
+      "lastName": "ROMUALDEZ",
+      "firstName": "FERDINAND MARTIN",
+      "middleName": "G.",
+      "suffix": null,
+      "nickName": "HON. FERDINAND MARTIN G. ROMUALDEZ",
+      "congresses": [20, 19, 18]
+    }
+  ],
+  "coAuthors": [
+    {
+      "personId": "D028",
+      "id": 156,
+      "lastName": "DE VENECIA",
+      "firstName": "MARIA GEORGINA",
+      "middleName": "P.",
+      "suffix": null,
+      "nickName": "GINA",
+      "congresses": [20, 19]
+    }
+  ],
+  "billType": "House Bill",
+  "significance": "National"
+}
+```
+
+**Note:** Uses the `/bills/search` endpoint from the source API with the document key. Returns 404 if the document is not found.
+
 #### GET /people
 
 Returns a paginated list of house members with their authored bills, co-authored bills, and committees.
@@ -586,7 +640,7 @@ deno task fetch /house-members/ddl-reference
 
 Searches for bills with advanced filtering options. This is the most reliable endpoint for fetching authored and co-authored bills.
 
-**Proxied by:** `GET /people` and `GET /people/:personId` (for documents)
+**Proxied by:** `GET /people`, `GET /people/:personId` (for documents), and `GET /congresses/:congressNumber/documents/:documentKey`
 
 **Payload:**
 ```json
@@ -607,24 +661,28 @@ Searches for bills with advanced filtering options. This is the most reliable en
 **Parameters:**
 - `author_type`: `"authorship"` (principal author), `"coauthorship"` (co-author), or `"Both"`
 - `congress`: Congress number (use raw API ID, e.g., 103 for 20th Congress)
-- `field`: Search field (`"Author"` for author search)
+- `field`: Search field (`"Author"` for author search, `"Bills"` for bill number search)
+- `numbers`: Bill number filter (e.g., `"HB00001"`)
 
 **Example:**
 ```bash
-# Authored bills
+# Authored bills by author
 deno task fetch /bills/search POST '{"page":0,"limit":10,"congress":103,"significance":"Both","field":"Author","numbers":"","author_id":"E001","author_type":"authorship","committee_id":"","title":""}'
 
-# Co-authored bills
+# Co-authored bills by author
 deno task fetch /bills/search POST '{"page":0,"limit":10,"congress":103,"significance":"Both","field":"Author","numbers":"","author_id":"E001","author_type":"coauthorship","committee_id":"","title":""}'
+
+# Search by bill number
+deno task fetch /bills/search POST '{"page":0,"limit":999,"congress":103,"significance":"Both","field":"Bills","numbers":"HB00001","author_id":"","author_type":"Both","committee_id":"","title":""}'
 ```
 
 **Advantages:**
 - More reliable than `/house-members/principal-author` and `/house-members/co-author`
 - Consistent data structure
-- Supports filtering by congress
+- Supports filtering by congress, author, and bill number
 - Returns detailed bill information
 
-**Note:** The proxy uses this endpoint to fetch authored and co-authored documents for each member, querying all congress sessions in parallel for better performance.
+**Note:** The proxy uses this endpoint to fetch authored and co-authored documents for each member, querying all congress sessions in parallel for better performance. It's also used by the document detail endpoint to fetch specific bills by their document key.
 
 ### POST /committee/list
 

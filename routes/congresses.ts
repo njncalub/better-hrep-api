@@ -1,8 +1,8 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { fetchCongressReference, fetchBillsList } from "../lib/api-client.ts";
+import { fetchCongressReference, fetchBillsList, fetchBillByDocumentKey } from "../lib/api-client.ts";
 import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
 import { openKv } from "../lib/kv.ts";
-import { CongressListSchema, type Congress, PaginatedDocumentsSchema, type DocumentInfo, type Reading, type Referral } from "../types/api.ts";
+import { CongressListSchema, type Congress, PaginatedDocumentsSchema, DocumentInfoSchema, type DocumentInfo, type Reading, type Referral } from "../types/api.ts";
 import type { CongressReferenceItem, BillListItem } from "../types/source.ts";
 
 const congressesRoute = createRoute({
@@ -107,6 +107,67 @@ const congressDocumentsRoute = createRoute({
   tags: ["Congresses"],
   summary: "Get documents for a specific congress",
   description: "Returns a paginated list of bills/documents for a specific congress. Fetches from the source API and validates author names against the people cache.",
+});
+
+/**
+ * Route definition for GET /congresses/{congressNumber}/documents/{documentKey}
+ */
+const congressDocumentByKeyRoute = createRoute({
+  method: "get",
+  path: "/congresses/{congressNumber}/documents/{documentKey}",
+  request: {
+    params: z.object({
+      congressNumber: z.string().openapi({
+        param: {
+          name: "congressNumber",
+          in: "path",
+        },
+        example: "20",
+        description: "Congress number (e.g., 20 for 20th Congress)",
+      }),
+      documentKey: z.string().openapi({
+        param: {
+          name: "documentKey",
+          in: "path",
+        },
+        example: "HB00001",
+        description: "Document key (e.g., HB00001)",
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: DocumentInfoSchema,
+        },
+      },
+      description: "Document details",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Document not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Internal server error",
+    },
+  },
+  tags: ["Congresses"],
+  summary: "Get a specific document by key",
+  description: "Returns details for a specific bill/document using the /bills/search endpoint from the source API.",
 });
 
 /**
@@ -290,6 +351,72 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
     );
   } catch (error) {
     console.error("Error fetching congress documents:", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
+  try {
+    const { congressNumber, documentKey } = c.req.valid("param");
+
+    const congressNum = parseInt(congressNumber, 10);
+
+    // Convert congress number to API ID (20 → 103)
+    const apiCongressId = mapToApiId(congressNum);
+
+    // Fetch from the source API using /bills/search
+    const response = await fetchBillByDocumentKey(apiCongressId, documentKey);
+
+    if (!response.success || !response.data) {
+      return c.json({ error: "Failed to fetch bill from source API" }, 500);
+    }
+
+    // Check if we got any results
+    if (response.data.rows.length === 0) {
+      return c.json({ error: "Document not found" }, 404);
+    }
+
+    // Get the first result (should be the only one matching the exact documentKey)
+    const bill = response.data.rows[0];
+
+    const kv = await openKv();
+
+    // List all authors for this document
+    const authorsIter = kv.list({
+      prefix: ["congresses", congressNum, documentKey, "authors"]
+    });
+    const authorPersonIds: string[] = [];
+    for await (const entry of authorsIter) {
+      if (entry.value === true) {
+        // Key format: ["congresses", congress, documentKey, "authors", personId]
+        const personId = entry.key[4] as string;
+        authorPersonIds.push(personId);
+      }
+    }
+
+    // List all coAuthors for this document
+    const coAuthorsIter = kv.list({
+      prefix: ["congresses", congressNum, documentKey, "coAuthors"]
+    });
+    const coAuthorPersonIds: string[] = [];
+    for await (const entry of coAuthorsIter) {
+      if (entry.value === true) {
+        // Key format: ["congresses", congress, documentKey, "coAuthors", personId]
+        const personId = entry.key[4] as string;
+        coAuthorPersonIds.push(personId);
+      }
+    }
+
+    const document = await transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds);
+
+    await kv.close();
+
+    return c.json(document, 200);
+  } catch (error) {
+    console.error("Error fetching congress document by key:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       500

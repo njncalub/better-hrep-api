@@ -196,3 +196,27 @@ export function fetchBillsList(
     body: { page, limit, congress, filter },
   });
 }
+
+/**
+ * Fetch specific bill from POST /bills/search by document key
+ */
+export function fetchBillByDocumentKey(
+  congress: number,
+  documentKey: string
+): Promise<BillsSearchResponse> {
+  return fetchFromAPI<BillsSearchResponse>("/bills/search", {
+    method: "POST",
+    body: {
+      page: 0,
+      limit: 999,
+      congress,
+      significance: "Both",
+      field: "Bills",
+      numbers: documentKey,
+      author_id: "",
+      author_type: "Both",
+      committee_id: "",
+      title: "",
+    },
+  });
+}

@@ -173,13 +173,9 @@ export type HouseMemberDDLResponse = BasicResponse<HouseMemberDDLItem[]>;
 
 /**
  * Bill search item from POST /bills/search
+ * This has the same structure as BillListItem
  */
-export interface BillSearchItem {
-  id: number;
-  congress: number;
-  bill_no: string;
-  // ... other fields exist but we only need congress and bill_no
-}
+export type BillSearchItem = BillListItem;
 
 export type BillsSearchResponse = PaginatedResponse<BillSearchItem>;
 
