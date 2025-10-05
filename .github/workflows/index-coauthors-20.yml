@@ -1,12 +1,12 @@
-name: Index Co-authors
+name: Index Co-authors - Congress 20
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 0 */2 * *'  # Every 2 days at midnight UTC
   workflow_dispatch: # Allow manual triggering
 
 jobs:
-  crawl-people:
+  index-coauthors-20:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,18 +18,18 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Index Co-authors
+      - name: Index Co-authors for Congress 20
         env:
           DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
           INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
           HREP_API_BASE_URL: ${{ secrets.HREP_API_BASE_URL }}
           X_HREP_WEBSITE_BACKEND: ${{ secrets.X_HREP_WEBSITE_BACKEND }}
-        run: deno task seed index-coauthors
+        run: deno task seed index-coauthors 20
 
       - name: Notify Success
         if: success()
-        run: echo "✅ People crawler completed successfully"
+        run: echo "✅ Co-authors indexing for Congress 20 completed successfully"
 
       - name: Notify Failure
         if: failure()
-        run: echo "❌ People crawler failed"
+        run: echo "❌ Co-authors indexing for Congress 20 failed"

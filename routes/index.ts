@@ -21,6 +21,10 @@ const IndexCoAuthorsRequestSchema = z.object({
     example: "your-indexer-key",
     description: "Indexer authentication key",
   }),
+  congress: z.number().openapi({
+    example: 20,
+    description: "Congress number to index (normalized ID, e.g., 8-20)",
+  }),
   personId: z.string().optional().openapi({
     example: "E001",
     description: "Optional: Index only this specific person ID",
@@ -187,7 +191,7 @@ const indexCommitteesInformationRoute = createRoute({
 
 const indexCoAuthorsRoute = createRoute({
   method: "post",
-  path: "/index/people/coauthors",
+  path: "/index/documents/coauthors",
   request: {
     body: {
       content: {
@@ -244,8 +248,8 @@ const indexCoAuthorsRoute = createRoute({
     },
   },
   tags: ["Index"],
-  summary: "Index co-authors data using /bills/search",
-  description: "Fetches co-authored bills for each person across all their congresses using POST /bills/search. Supports chunking to avoid timeouts. Requires valid indexer key.",
+  summary: "Index document co-authors data using /bills/search",
+  description: "Fetches co-authored bills for a specific congress using POST /bills/search. Caches co-author relationships for each document. Supports processing specific person or chunking all people. Requires valid indexer key.",
 });
 
 export const indexRouter = new OpenAPIHono();
@@ -513,7 +517,7 @@ indexRouter.openapi(indexCommitteesInformationRoute, async (c) => {
 
 indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
   try {
-    const { key, personId, startIndex = 0, chunkSize = 10 } = c.req.valid("json");
+    const { key, congress, personId, startIndex = 0, chunkSize = 10 } = c.req.valid("json");
 
     // Verify indexer key
     if (key !== INDEXER_KEY) {
@@ -526,77 +530,62 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
     try {
       // If personId is specified, only process that person
       if (personId) {
-        console.log(`Processing single person: ${personId}`);
-        // Get person's congress memberships from cache
-        const membershipEntry = await kv.get<number[]>(["people", "byPersonId", personId, "membership"]);
+        console.log(`Processing single person: ${personId} for congress ${congress}`);
 
-        if (!membershipEntry.value) {
-          return c.json({ error: `Person ${personId} not found in cache` }, 404);
-        }
+        const apiCongressId = mapToApiId(congress);
+        console.log(`  Fetching co-authored bills for congress ${congress} (API ID: ${apiCongressId})...`);
 
-        const congresses = membershipEntry.value;
-        console.log(`  Congresses: ${congresses.join(", ")}`);
+        // Paginate through all results with limit 50
+        let page = 0;
+        let totalBills = 0;
+        const limit = 50;
 
-        // Accumulate all co-authored documents for person-centric cache
-        const allCoAuthoredDocs: { congress: number; documentKey: string }[] = [];
+        while (true) {
+          const response = await fetchBillsSearch({
+            page,
+            limit,
+            congress: apiCongressId,
+            significance: "Both",
+            field: "Author",
+            numbers: "",
+            author_id: personId,
+            author_type: "coauthorship",
+            committee_id: "",
+            title: "",
+          });
 
-        // Fetch co-authored bills for each congress
-        for (const congress of congresses) {
-          try {
-            const apiCongressId = mapToApiId(congress);
-            console.log(`  Fetching co-authored bills for congress ${congress} (API ID: ${apiCongressId})...`);
-            const response = await fetchBillsSearch({
-              page: 0,
-              limit: 999,
-              congress: apiCongressId,
-              significance: "Both",
-              field: "Author",
-              numbers: "",
-              author_id: personId,
-              author_type: "coauthorship",
-              committee_id: "",
-              title: "",
-            });
-
-            if (response.success && response.data?.rows) {
-              console.log(`    Found ${response.data.rows.length} co-authored bills`);
-              // Cache each co-authored document (document-centric)
-              const atomic = kv.atomic();
-              for (const bill of response.data.rows) {
-                atomic.set(
-                  ["congresses", congress, bill.bill_no, "coAuthors", personId],
-                  true,
-                  { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
-                );
-                indexed++;
-
-                // Add to person's co-authored documents list
-                allCoAuthoredDocs.push({
-                  congress,
-                  documentKey: bill.bill_no,
-                });
-              }
-              await atomic.commit();
-            } else {
-              console.log(`    No co-authored bills found`);
-            }
-          } catch (error) {
-            console.error(`Failed to fetch co-authored bills for ${personId} in congress ${congress}:`, error);
+          if (!response.success || !response.data?.rows || response.data.rows.length === 0) {
+            break;
           }
+
+          console.log(`    Page ${page}: Found ${response.data.rows.length} co-authored bills`);
+          totalBills += response.data.rows.length;
+
+          // Cache each co-authored document (document-centric)
+          const atomic = kv.atomic();
+          for (const bill of response.data.rows) {
+            atomic.set(
+              ["congresses", congress, bill.bill_no, "coAuthors", personId],
+              true,
+              { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+            );
+            indexed++;
+          }
+          await atomic.commit();
+
+          // Check if we've reached the last page
+          if (response.data.rows.length < limit) {
+            break;
+          }
+
+          page++;
         }
 
-        // Cache the full co-authored documents array for person-centric access
-        if (allCoAuthoredDocs.length > 0) {
-          await kv.set(
-            ["people", "byPersonId", personId, "coAuthoredDocuments"],
-            allCoAuthoredDocs,
-            { expireIn: 24 * 60 * 60 * 1000 } // 1 day TTL
-          );
-        }
+        console.log(`    Total: ${totalBills} co-authored bills indexed`);
 
         return c.json(
           {
-            message: `Successfully indexed co-authors for person ${personId}`,
+            message: `Successfully indexed co-authors for person ${personId} in congress ${congress}`,
             indexed,
             peopleProcessed: 1,
             totalPeople: 1,
@@ -612,80 +601,78 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
         return c.json({ error: "Failed to fetch house members DDL reference" }, 500);
       }
 
-      const allPeople = allPeopleResponse.data;
-      const totalPeople = allPeople.length;
+      // Filter to only people who are members of the specified congress
+      const filteredPeople = allPeopleResponse.data.filter(person =>
+        person.membership.map(mapCongressId).includes(congress)
+      );
+
+      const totalPeople = filteredPeople.length;
       const endIndex = Math.min(startIndex + chunkSize, totalPeople);
-      const chunk = allPeople.slice(startIndex, endIndex);
+      const chunk = filteredPeople.slice(startIndex, endIndex);
+
+      console.log(`Processing congress ${congress}: ${chunk.length} people (${startIndex} to ${endIndex - 1} of ${totalPeople})`);
 
       // Process each person in the chunk
       for (const member of chunk) {
         console.log(`  Processing ${member.author_id} (${member.fullname})...`);
-        const congresses = member.membership.map(mapCongressId);
-        console.log(`    Congresses: ${congresses.join(", ")}`);
 
-        // Accumulate all co-authored documents for this person
-        const allCoAuthoredDocs: { congress: number; documentKey: string }[] = [];
+        const apiCongressId = mapToApiId(congress);
+        console.log(`    Fetching co-authored bills for congress ${congress} (API ID: ${apiCongressId})...`);
 
-        // Fetch co-authored bills for each congress
-        for (const congress of congresses) {
-          try {
-            const apiCongressId = mapToApiId(congress);
-            console.log(`    Fetching co-authored bills for congress ${congress} (API ID: ${apiCongressId})...`);
-            const response = await fetchBillsSearch({
-              page: 0,
-              limit: 999,
-              congress: apiCongressId,
-              significance: "Both",
-              field: "Author",
-              numbers: "",
-              author_id: member.author_id,
-              author_type: "coauthorship",
-              committee_id: "",
-              title: "",
-            });
+        // Paginate through all results with limit 50
+        let page = 0;
+        let totalBills = 0;
+        const limit = 50;
 
-            if (response.success && response.data?.rows) {
-              console.log(`      Found ${response.data.rows.length} co-authored bills`);
-              // Cache each co-authored document (document-centric)
-              const atomic = kv.atomic();
-              for (const bill of response.data.rows) {
-                atomic.set(
-                  ["congresses", congress, bill.bill_no, "coAuthors", member.author_id],
-                  true,
-                  { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
-                );
-                indexed++;
+        while (true) {
+          const response = await fetchBillsSearch({
+            page,
+            limit,
+            congress: apiCongressId,
+            significance: "Both",
+            field: "Author",
+            numbers: "",
+            author_id: member.author_id,
+            author_type: "coauthorship",
+            committee_id: "",
+            title: "",
+          });
 
-                // Add to person's co-authored documents list
-                allCoAuthoredDocs.push({
-                  congress,
-                  documentKey: bill.bill_no,
-                });
-              }
-              await atomic.commit();
-            } else {
-              console.log(`      No co-authored bills found`);
-            }
-          } catch (error) {
-            console.error(`Failed to fetch co-authored bills for ${member.author_id} in congress ${congress}:`, error);
+          if (!response.success || !response.data?.rows || response.data.rows.length === 0) {
+            break;
           }
+
+          console.log(`      Page ${page}: Found ${response.data.rows.length} co-authored bills`);
+          totalBills += response.data.rows.length;
+
+          // Cache each co-authored document (document-centric)
+          const atomic = kv.atomic();
+          for (const bill of response.data.rows) {
+            atomic.set(
+              ["congresses", congress, bill.bill_no, "coAuthors", member.author_id],
+              true,
+              { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+            );
+            indexed++;
+          }
+          await atomic.commit();
+
+          // Check if we've reached the last page
+          if (response.data.rows.length < limit) {
+            break;
+          }
+
+          page++;
         }
 
-        // Cache the full co-authored documents array for person-centric access
-        if (allCoAuthoredDocs.length > 0) {
-          await kv.set(
-            ["people", "byPersonId", member.author_id, "coAuthoredDocuments"],
-            allCoAuthoredDocs,
-            { expireIn: 24 * 60 * 60 * 1000 } // 1 day TTL
-          );
-        }
+        console.log(`      Total: ${totalBills} co-authored bills indexed`);
       }
 
       const nextStartIndex = endIndex < totalPeople ? endIndex : undefined;
 
       return c.json(
         {
-          message: `Successfully indexed co-authors for ${chunk.length} people (${startIndex} to ${endIndex - 1} of ${totalPeople})`,
+          message: `Successfully indexed co-authors for ${chunk.length} people in congress ${congress} (${startIndex} to ${endIndex - 1} of ${totalPeople})`,
           indexed,
           peopleProcessed: chunk.length,
           totalPeople,

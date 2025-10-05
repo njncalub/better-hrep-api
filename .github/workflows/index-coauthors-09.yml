@@ -1,0 +1,33 @@
+name: Index Co-authors - Congress 9
+
+on:
+  workflow_dispatch: # Manual triggering only (historical data)
+
+jobs:
+  index-coauthors-09:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Index Co-authors for Congress 9
+        env:
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+          HREP_API_BASE_URL: ${{ secrets.HREP_API_BASE_URL }}
+          X_HREP_WEBSITE_BACKEND: ${{ secrets.X_HREP_WEBSITE_BACKEND }}
+        run: deno task seed index-coauthors 9
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Co-authors indexing for Congress 9 completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Co-authors indexing for Congress 9 failed"
