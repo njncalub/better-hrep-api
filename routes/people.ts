@@ -197,6 +197,35 @@ async function transformHouseMember(member: HouseMemberItem, latestCongress: num
       console.error(`Failed to fetch committees for ${member.author_id}:`, error);
     }
 
+    // Cache the full document arrays and committees for /people/{personId} endpoint
+    // TTL: 1 day for faster responses
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    try {
+      const cacheAtomic = kv.atomic();
+
+      cacheAtomic.set(
+        ["people", "byPersonId", member.author_id, "authoredDocuments"],
+        authoredDocuments,
+        { expireIn: ONE_DAY_MS }
+      );
+
+      cacheAtomic.set(
+        ["people", "byPersonId", member.author_id, "coAuthoredDocuments"],
+        coAuthoredDocuments,
+        { expireIn: ONE_DAY_MS }
+      );
+
+      cacheAtomic.set(
+        ["people", "byPersonId", member.author_id, "committees"],
+        committees,
+        { expireIn: ONE_DAY_MS }
+      );
+
+      await cacheAtomic.commit();
+    } catch (error) {
+      console.error(`Failed to cache full person data for ${member.author_id}:`, error);
+    }
+
     return {
       id: member.id,
       personId: member.author_id,
@@ -314,98 +343,124 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
     let person: Person;
 
     if (infoEntry.value) {
-      // Build person from cache + fresh API calls
+      // Build person from cache
       const info = infoEntry.value;
 
-      // Get membership from cache (need this to query bills by congress)
+      // Get membership and document data from cache
       const kv2 = await openKv();
-      const membershipEntry = await kv2.get<number[]>(["people", "byPersonId", personId, "membership"]);
+      const [membershipEntry, authoredEntry, coAuthoredEntry, committeesEntry] = await Promise.all([
+        kv2.get<number[]>(["people", "byPersonId", personId, "membership"]),
+        kv2.get<Document[]>(["people", "byPersonId", personId, "authoredDocuments"]),
+        kv2.get<Document[]>(["people", "byPersonId", personId, "coAuthoredDocuments"]),
+        kv2.get<Committee[]>(["people", "byPersonId", personId, "committees"]),
+      ]);
       await kv2.close();
 
       const membershipCongresses = membershipEntry.value ?? [];
+      const cachedAuthored = authoredEntry.value;
+      const cachedCoAuthored = coAuthoredEntry.value;
+      const cachedCommittees = committeesEntry.value;
 
-      // Fetch all data in parallel
-      const [authoredResults, coAuthoredResults, committeeResponse] = await Promise.all([
-        // Fetch authored documents for all congresses in parallel
-        Promise.all(
-          membershipCongresses.map(async (congress) => {
-            try {
-              const apiCongressId = mapToApiId(congress);
-              const response = await fetchBillsSearch({
-                congress: apiCongressId,
-                author_id: personId,
-                author_type: "authorship",
-              });
-              if (response.success && response.data?.rows) {
-                return response.data.rows.map((bill) => ({
-                  congress: mapCongressId(bill.congress),
-                  documentKey: bill.bill_no,
-                }));
+      // If we have all cached data, use it (zero API calls!)
+      if (cachedAuthored && cachedCoAuthored && cachedCommittees) {
+        person = {
+          id: info.id,
+          personId,
+          lastName: info.lastName,
+          firstName: info.firstName,
+          middleName: info.middleName,
+          suffix: info.suffix,
+          nickName: info.nickName,
+          congresses: membershipCongresses,
+          authoredDocuments: cachedAuthored,
+          coAuthoredDocuments: cachedCoAuthored,
+          committees: cachedCommittees,
+        };
+      } else {
+        // Fallback: Fetch from API if cache is incomplete
+        const [authoredResults, coAuthoredResults, committeeResponse] = await Promise.all([
+          // Fetch authored documents for all congresses in parallel
+          cachedAuthored ? Promise.resolve([cachedAuthored]) : Promise.all(
+            membershipCongresses.map(async (congress) => {
+              try {
+                const apiCongressId = mapToApiId(congress);
+                const response = await fetchBillsSearch({
+                  congress: apiCongressId,
+                  author_id: personId,
+                  author_type: "authorship",
+                });
+                if (response.success && response.data?.rows) {
+                  return response.data.rows.map((bill) => ({
+                    congress: mapCongressId(bill.congress),
+                    documentKey: bill.bill_no,
+                  }));
+                }
+                return [];
+              } catch (error) {
+                console.error(`Failed to fetch authored bills for ${personId} in congress ${congress}:`, error);
+                return [];
               }
-              return [];
-            } catch (error) {
-              console.error(`Failed to fetch authored bills for ${personId} in congress ${congress}:`, error);
-              return [];
-            }
-          })
-        ),
-        // Fetch co-authored documents for all congresses in parallel
-        Promise.all(
-          membershipCongresses.map(async (congress) => {
-            try {
-              const apiCongressId = mapToApiId(congress);
-              const response = await fetchBillsSearch({
-                congress: apiCongressId,
-                author_id: personId,
-                author_type: "coauthorship",
-              });
-              if (response.success && response.data?.rows) {
-                return response.data.rows.map((bill) => ({
-                  congress: mapCongressId(bill.congress),
-                  documentKey: bill.bill_no,
-                }));
+            })
+          ),
+          // Fetch co-authored documents for all congresses in parallel
+          cachedCoAuthored ? Promise.resolve([cachedCoAuthored]) : Promise.all(
+            membershipCongresses.map(async (congress) => {
+              try {
+                const apiCongressId = mapToApiId(congress);
+                const response = await fetchBillsSearch({
+                  congress: apiCongressId,
+                  author_id: personId,
+                  author_type: "coauthorship",
+                });
+                if (response.success && response.data?.rows) {
+                  return response.data.rows.map((bill) => ({
+                    congress: mapCongressId(bill.congress),
+                    documentKey: bill.bill_no,
+                  }));
+                }
+                return [];
+              } catch (error) {
+                console.error(`Failed to fetch co-authored bills for ${personId} in congress ${congress}:`, error);
+                return [];
               }
-              return [];
-            } catch (error) {
-              console.error(`Failed to fetch co-authored bills for ${personId} in congress ${congress}:`, error);
-              return [];
-            }
-          })
-        ),
-        // Fetch committee memberships
-        fetchCommitteeMembership(personId).catch((error) => {
-          console.error(`Failed to fetch committees for ${personId}:`, error);
-          return { status: 500, success: false, data: { count: 0, rows: [] } };
-        }),
-      ]);
+            })
+          ),
+          // Fetch committee memberships
+          cachedCommittees ? Promise.resolve({ status: 200, success: true, data: { count: cachedCommittees.length, rows: [] } }) : fetchCommitteeMembership(personId).catch((error) => {
+            console.error(`Failed to fetch committees for ${personId}:`, error);
+            return { status: 500, success: false, data: { count: 0, rows: [] } };
+          }),
+        ]);
 
-      // Flatten results
-      const authoredDocuments = authoredResults.flat();
-      const coAuthoredDocuments = coAuthoredResults.flat();
-      const committees: Committee[] =
-        committeeResponse.success && committeeResponse.data?.rows
-          ? committeeResponse.data.rows.map((committee) => ({
-              congress: mapCongressId(committee.congress),
-              committeeId: committee.committee_code,
-              name: committee.name,
-              position: committee.title,
-              journalNo: committee.journal_no,
-            }))
-          : [];
+        // Flatten results
+        const authoredDocuments = cachedAuthored ?? authoredResults.flat();
+        const coAuthoredDocuments = cachedCoAuthored ?? coAuthoredResults.flat();
+        const committees: Committee[] = cachedCommittees ?? (
+          committeeResponse.success && committeeResponse.data?.rows
+            ? committeeResponse.data.rows.map((committee) => ({
+                congress: mapCongressId(committee.congress),
+                committeeId: committee.committee_code,
+                name: committee.name,
+                position: committee.title,
+                journalNo: committee.journal_no,
+              }))
+            : []
+        );
 
-      person = {
-        id: info.id,
-        personId,
-        lastName: info.lastName,
-        firstName: info.firstName,
-        middleName: info.middleName,
-        suffix: info.suffix,
-        nickName: info.nickName,
-        congresses: membershipCongresses,
-        authoredDocuments,
-        coAuthoredDocuments,
-        committees,
-      };
+        person = {
+          id: info.id,
+          personId,
+          lastName: info.lastName,
+          firstName: info.firstName,
+          middleName: info.middleName,
+          suffix: info.suffix,
+          nickName: info.nickName,
+          congresses: membershipCongresses,
+          authoredDocuments,
+          coAuthoredDocuments,
+          committees,
+        };
+      }
     } else {
       // Fallback: Paginate through members until we find the person
       const limit = 100;

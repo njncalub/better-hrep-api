@@ -1,8 +1,14 @@
 import { Hono, Context } from "hono";
+import { trimTrailingSlash } from "hono/trailing-slash";
 import { Layout } from "../components/Layout.tsx";
+import { PersonCard } from "../components/PersonCard.tsx";
+import { CongressBadges } from "../components/CongressBadges.tsx";
 import type { Congress, PaginatedDocuments, DocumentInfo, PaginatedPeople, Person, PaginatedCommittees } from "../types/api.ts";
 
 const pages = new Hono();
+
+// Remove trailing slashes and redirect
+pages.use("*", trimTrailingSlash());
 
 // Helper function to get base URL
 function getBaseUrl(c: Context): string {
@@ -23,37 +29,63 @@ async function fetchAPI<T>(c: Context, path: string): Promise<T> {
 // Homepage
 pages.get("/", (c) => {
   return c.html(
-    <Layout title="Better HREP - Philippine House of Representatives Data">
-      <h1>Better HREP</h1>
-      <p>A cleaner, well-documented interface for browsing Philippine House of Representatives data.</p>
-
-      <div class="list-grid">
-        <div class="card">
-          <h3><a href="/congresses">Browse Congresses</a></h3>
-          <p>View all Philippine congressional sessions and their legislative documents.</p>
-        </div>
-
-        <div class="card">
-          <h3><a href="/people">Browse Representatives</a></h3>
-          <p>Explore current and former members of the House of Representatives.</p>
-        </div>
-
-        <div class="card">
-          <h3><a href="/committees">Browse Committees</a></h3>
-          <p>View all House committees and their jurisdictions.</p>
-        </div>
+    <Layout title="Better HREP API - Philippine House of Representatives Data">
+      <div class="hero">
+        <h1>Better HREP API</h1>
+        <p>A clean, well-documented interface for browsing Philippine House of Representatives legislative data</p>
       </div>
 
-      <hr />
+      <section>
+        <h2>Browse Data</h2>
+        <div class="list-grid">
+          <article class="card">
+            <h3><a href="/congresses">Congresses</a></h3>
+            <p>View all Philippine congressional sessions and their legislative documents</p>
+          </article>
 
-      <h2>About</h2>
-      <p>
-        This is a cleaner interface for the <a href="https://congress.gov.ph" target="_blank">House of Representatives website</a>.
-        All data comes from the official HREP API.
-      </p>
-      <p>
-        For developers: Check out the <a href="/api">API documentation</a> to access this data programmatically.
-      </p>
+          <article class="card">
+            <h3><a href="/people">Representatives</a></h3>
+            <p>Explore current and former members of the House of Representatives</p>
+          </article>
+
+          <article class="card">
+            <h3><a href="/committees">Committees</a></h3>
+            <p>View all House committees and their jurisdictions</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>For Developers</h2>
+        <p>
+          This project provides both a web interface and a RESTful API for accessing Philippine legislative data.
+          The API offers clean, normalized data structures with full OpenAPI documentation.
+        </p>
+        <p>
+          <a href="/api" role="button">View API Documentation</a>
+        </p>
+      </section>
+
+      <section>
+        <h2>About This Project</h2>
+        <p>
+          Better HREP API is an open-source proxy that provides a cleaner interface to the{" "}
+          <a href="https://congress.gov.ph" target="_blank" rel="noopener noreferrer">
+            House of Representatives website
+          </a>.
+          All data comes from the official HREP API and is presented in a more accessible format.
+        </p>
+        <p>
+          <strong>Key Features:</strong>
+        </p>
+        <ul>
+          <li>Clean, normalized data structures</li>
+          <li>Full OpenAPI/Swagger documentation</li>
+          <li>Type-safe TypeScript implementation</li>
+          <li>Responsive web interface</li>
+          <li>RESTful API endpoints</li>
+        </ul>
+      </section>
     </Layout>
   );
 });
@@ -63,16 +95,18 @@ pages.get("/congresses", async (c) => {
   const congresses = await fetchAPI<Congress[]>(c, "/congresses");
 
   return c.html(
-    <Layout title="Congresses - Better HREP">
-      <h1>Philippine Congresses</h1>
-      <p>Browse all congressional sessions of the Philippine House of Representatives.</p>
+    <Layout title="Congresses - Better HREP API">
+      <div>
+        <h1>Philippine Congresses</h1>
+        <p>Browse all congressional sessions of the Philippine House of Representatives</p>
+      </div>
 
       <div class="list-grid">
         {congresses.map((congress) => (
-          <div class="card">
+          <article class="card">
             <h3><a href={`/congresses/${congress.id}`}>{congress.name}</a></h3>
             <p class="meta">Congress Number: {congress.id}</p>
-          </div>
+          </article>
         ))}
       </div>
     </Layout>
@@ -88,26 +122,34 @@ pages.get("/congresses/:congressNumber", async (c) => {
   const documents = await fetchAPI<PaginatedDocuments>(c, `/congresses/${congressNumber}/documents?page=${page}&limit=${limit}`);
 
   return c.html(
-    <Layout title={congressNumber + "th Congress - Better HREP"}>
+    <Layout title={congressNumber + "th Congress - Better HREP API"}>
       <h1>{congressNumber}th Congress</h1>
       <p class="meta">Showing {documents.data.length} of {documents.total} bills (Page {documents.page + 1} of {documents.totalPages})</p>
 
-      {documents.data.map((doc) => (
-        <div class="card">
-          <h3>
-            <a href={`/congresses/${congressNumber}/bills/${doc.documentKey}`}>
-              {doc.documentKey}
-            </a>
-          </h3>
-          <p><strong>{doc.titleFull || doc.titleShort}</strong></p>
-          <p class="meta">
-            Filed: {doc.dateFiled} |
-            {doc.authors.length} author{doc.authors.length !== 1 ? 's' : ''} |
-            {doc.coAuthors.length} co-author{doc.coAuthors.length !== 1 ? 's' : ''}
-          </p>
-          <p class="meta">{doc.status}</p>
-        </div>
-      ))}
+      <div class="bills-list">
+        {documents.data.map((doc) => (
+          <article class="bill-card">
+            <div class="bill-header">
+              <h3>
+                <a href={`/congresses/${congressNumber}/documents/${doc.documentKey}`}>
+                  {doc.documentKey}
+                </a>
+              </h3>
+              <span class="bill-date">{doc.dateFiled}</span>
+            </div>
+            <p class="bill-title">{doc.titleFull || doc.titleShort}</p>
+            <div class="bill-meta">
+              <span class="bill-meta-item">
+                <strong>{doc.authors.length}</strong> author{doc.authors.length !== 1 ? 's' : ''}
+              </span>
+              <span class="bill-meta-item">
+                <strong>{doc.coAuthors.length}</strong> co-author{doc.coAuthors.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <p class="bill-status">{doc.status}</p>
+          </article>
+        ))}
+      </div>
 
       <nav>
         <ul>
@@ -124,20 +166,24 @@ pages.get("/congresses/:congressNumber", async (c) => {
 });
 
 // Single bill detail
-pages.get("/congresses/:congressNumber/bills/:documentKey", async (c) => {
+pages.get("/congresses/:congressNumber/documents/:documentKey", async (c) => {
   const congressNumber = c.req.param("congressNumber");
   const documentKey = c.req.param("documentKey");
 
   const bill = await fetchAPI<DocumentInfo>(c, `/congresses/${congressNumber}/documents/${documentKey}`);
 
   return c.html(
-    <Layout title={bill.documentKey + " - " + congressNumber + "th Congress - Better HREP"}>
+    <Layout title={bill.documentKey + " - " + congressNumber + "th Congress - Better HREP API"}>
       <nav>
         <a href={`/congresses/${congressNumber}`}>← Back to {congressNumber}th Congress</a>
       </nav>
 
       <h1>{bill.documentKey}</h1>
-      <p class="meta">{bill.billType} | {bill.significance}</p>
+      <p class="meta">
+        {bill.billType && bill.significance && `${bill.billType} | ${bill.significance}`}
+        {bill.billType && !bill.significance && bill.billType}
+        {!bill.billType && bill.significance && bill.significance}
+      </p>
 
       <h2>Title</h2>
       <p>{bill.titleFull || bill.titleShort}</p>
@@ -158,24 +204,18 @@ pages.get("/congresses/:congressNumber/bills/:documentKey", async (c) => {
       </ul>
 
       <h2>Authors ({bill.authors.length})</h2>
-      <div class="list-grid">
+      <div class="people-grid">
         {bill.authors.map((author) => (
-          <div class="card">
-            <h3><a href={`/people/${author.personId}`}>{author.firstName} {author.lastName}</a></h3>
-            <p class="meta">Congresses: {author.congresses.join(", ")}</p>
-          </div>
+          <PersonCard person={author} showStats={false} />
         ))}
       </div>
 
       {bill.coAuthors.length > 0 && (
         <>
           <h2>Co-Authors ({bill.coAuthors.length})</h2>
-          <div class="list-grid">
+          <div class="people-grid">
             {bill.coAuthors.map((coAuthor) => (
-              <div class="card">
-                <h3><a href={`/people/${coAuthor.personId}`}>{coAuthor.firstName} {coAuthor.lastName}</a></h3>
-                <p class="meta">Congresses: {coAuthor.congresses.join(", ")}</p>
-              </div>
+              <PersonCard person={coAuthor} showStats={false} />
             ))}
           </div>
         </>
@@ -192,20 +232,13 @@ pages.get("/people", async (c) => {
   const people = await fetchAPI<PaginatedPeople>(c, `/people?page=${page}&limit=${limit}`);
 
   return c.html(
-    <Layout title="Representatives - Better HREP">
+    <Layout title="Representatives - Better HREP API">
       <h1>House Representatives</h1>
       <p class="meta">Showing {people.data.length} of {people.total} representatives (Page {people.page + 1} of {people.totalPages})</p>
 
-      <div class="list-grid">
+      <div class="people-grid">
         {people.data.map((person) => (
-          <div class="card">
-            <h3><a href={`/people/${person.personId}`}>{person.firstName} {person.lastName}</a></h3>
-            <p class="meta">
-              {person.authoredDocuments.length} authored bills |
-              {person.coAuthoredDocuments.length} co-authored bills
-            </p>
-            <p class="meta">Congresses: {person.congresses.join(", ")}</p>
-          </div>
+          <PersonCard person={person} showStats={true} />
         ))}
       </div>
 
@@ -230,49 +263,89 @@ pages.get("/people/:personId", async (c) => {
   const person = await fetchAPI<Person>(c, `/people/${personId}`);
 
   return c.html(
-    <Layout title={person.firstName + " " + person.lastName + " - Better HREP"}>
+    <Layout title={person.firstName + " " + person.lastName + " - Better HREP API"}>
       <nav>
         <a href="/people">← Back to Representatives</a>
       </nav>
 
       <h1>{person.firstName} {person.middleName} {person.lastName}{person.suffix ? ` ${person.suffix}` : ''}</h1>
       <p class="meta">Person ID: {person.personId}</p>
-      <p class="meta">Congresses: {person.congresses.join(", ")}</p>
+      <CongressBadges congresses={person.congresses} />
 
-      <h2>Authored Bills ({person.authoredDocuments.length})</h2>
+      <h2>Authored ({person.authoredDocuments.length})</h2>
       {person.authoredDocuments.length > 0 ? (
-        <div class="list-grid">
-          {person.authoredDocuments.map((doc) => (
-            <div class="card">
-              <h3>
-                <a href={`/congresses/${doc.congress}/bills/${doc.documentKey}`}>
-                  {doc.documentKey}
-                </a>
-              </h3>
-              <p class="meta">{doc.congress}th Congress</p>
-            </div>
-          ))}
-        </div>
+        <>
+          {(() => {
+            // Group bills by congress
+            const billsByCongress = person.authoredDocuments.reduce((acc, doc) => {
+              if (!acc[doc.congress]) {
+                acc[doc.congress] = [];
+              }
+              acc[doc.congress].push(doc);
+              return acc;
+            }, {} as Record<number, typeof person.authoredDocuments>);
+
+            // Sort congresses in descending order
+            const sortedCongresses = Object.keys(billsByCongress)
+              .map(Number)
+              .sort((a, b) => b - a);
+
+            return sortedCongresses.map((congress) => (
+              <>
+                <h3>{congress}th Congress ({billsByCongress[congress].length})</h3>
+                <ul>
+                  {billsByCongress[congress].map((doc) => (
+                    <li>
+                      <a href={`/congresses/${doc.congress}/documents/${doc.documentKey}`}>
+                        {doc.documentKey}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ));
+          })()}
+        </>
       ) : (
-        <p>No authored bills found.</p>
+        <p>No authored documents found.</p>
       )}
 
-      <h2>Co-Authored Bills ({person.coAuthoredDocuments.length})</h2>
+      <h2>Co-Authored ({person.coAuthoredDocuments.length})</h2>
       {person.coAuthoredDocuments.length > 0 ? (
-        <div class="list-grid">
-          {person.coAuthoredDocuments.map((doc) => (
-            <div class="card">
-              <h3>
-                <a href={`/congresses/${doc.congress}/bills/${doc.documentKey}`}>
-                  {doc.documentKey}
-                </a>
-              </h3>
-              <p class="meta">{doc.congress}th Congress</p>
-            </div>
-          ))}
-        </div>
+        <>
+          {(() => {
+            // Group bills by congress
+            const billsByCongress = person.coAuthoredDocuments.reduce((acc, doc) => {
+              if (!acc[doc.congress]) {
+                acc[doc.congress] = [];
+              }
+              acc[doc.congress].push(doc);
+              return acc;
+            }, {} as Record<number, typeof person.coAuthoredDocuments>);
+
+            // Sort congresses in descending order
+            const sortedCongresses = Object.keys(billsByCongress)
+              .map(Number)
+              .sort((a, b) => b - a);
+
+            return sortedCongresses.map((congress) => (
+              <>
+                <h3>{congress}th Congress ({billsByCongress[congress].length})</h3>
+                <ul>
+                  {billsByCongress[congress].map((doc) => (
+                    <li>
+                      <a href={`/congresses/${doc.congress}/documents/${doc.documentKey}`}>
+                        {doc.documentKey}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ));
+          })()}
+        </>
       ) : (
-        <p>No co-authored bills found.</p>
+        <p>No co-authored documents found.</p>
       )}
 
       {person.committees.length > 0 && (
@@ -301,7 +374,7 @@ pages.get("/committees", async (c) => {
   const committees = await fetchAPI<PaginatedCommittees>(c, `/committees?page=${page}&limit=${limit}`);
 
   return c.html(
-    <Layout title="Committees - Better HREP">
+    <Layout title="Committees - Better HREP API">
       <h1>House Committees</h1>
       <p class="meta">Showing {committees.data.length} of {committees.total} committees (Page {committees.page + 1} of {committees.totalPages})</p>
 
@@ -337,7 +410,7 @@ pages.get("/committees/:committeeId", async (c) => {
 
   if (!committee) {
     return c.html(
-      <Layout title="Committee Not Found - Better HREP">
+      <Layout title="Committee Not Found - Better HREP API">
         <h1>Committee Not Found</h1>
         <p>The committee with ID {committeeId} was not found.</p>
         <p><a href="/committees">← Back to Committees</a></p>
@@ -347,7 +420,7 @@ pages.get("/committees/:committeeId", async (c) => {
   }
 
   return c.html(
-    <Layout title={committee.name + " - Better HREP"}>
+    <Layout title={committee.name + " - Better HREP API"}>
       <nav>
         <a href="/committees">← Back to Committees</a>
       </nav>

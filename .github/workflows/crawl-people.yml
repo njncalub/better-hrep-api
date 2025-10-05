@@ -21,9 +21,9 @@ jobs:
 
       - name: Crawl All People Pages
         env:
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
           INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
-        run: deno run --allow-net --allow-env --allow-read scripts/seed.ts crawl-people
+        run: deno task seed crawl-people
 
       - name: Notify Success
         if: success()

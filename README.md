@@ -773,14 +773,14 @@ The API includes automated indexing via GitHub Actions to keep the cache updated
 
 Configure the following secrets in your GitHub repository settings:
 
-1. **`API_BASE_URL`** - Your deployed API URL (e.g., `https://your-api.deno.dev`)
+1. **`DEPLOYED_API_BASE_URL`** - Your deployed API URL (e.g., `https://your-api.deno.dev`)
 2. **`INDEXER_KEY`** - The indexer authentication key from your `.env` file
 
 **To add secrets:**
 1. Go to your repository on GitHub
 2. Navigate to Settings → Secrets and variables → Actions
 3. Click "New repository secret"
-4. Add both `API_BASE_URL` and `INDEXER_KEY`
+4. Add both `DEPLOYED_API_BASE_URL` and `INDEXER_KEY`
 
 ### Manual Workflow Triggers
 

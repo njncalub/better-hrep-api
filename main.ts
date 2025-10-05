@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { Hono } from "hono";
+import { trimTrailingSlash } from "hono/trailing-slash";
 import { congressesRouter } from "./routes/congresses.ts";
 import { peopleRouter } from "./routes/people.ts";
 import { committeesRouter } from "./routes/committees.ts";
@@ -10,6 +11,10 @@ import { pages } from "./routes/pages.tsx";
 
 const app = new Hono();
 const apiApp = new OpenAPIHono({ strict: false });
+
+// Remove trailing slashes and redirect
+app.use("*", trimTrailingSlash());
+apiApp.use("*", trimTrailingSlash());
 
 // Mount API routes under /api
 apiApp.route("/", congressesRouter);

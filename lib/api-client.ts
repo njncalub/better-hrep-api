@@ -10,11 +10,11 @@ import type {
   BillsListResponse,
 } from "../types/source.ts";
 
-const BASE_API_URL = Deno.env.get("BASE_API_URL")!;
+const HREP_API_BASE_URL = Deno.env.get("HREP_API_BASE_URL")!;
 const X_HREP_WEBSITE_BACKEND = Deno.env.get("X_HREP_WEBSITE_BACKEND")!;
 
-if (!BASE_API_URL || !X_HREP_WEBSITE_BACKEND) {
-  throw new Error("BASE_API_URL and X_HREP_WEBSITE_BACKEND environment variables must be set");
+if (!HREP_API_BASE_URL || !X_HREP_WEBSITE_BACKEND) {
+  throw new Error("HREP_API_BASE_URL and X_HREP_WEBSITE_BACKEND environment variables must be set");
 }
 
 export interface FetchOptions {
@@ -30,7 +30,7 @@ export async function fetchFromAPI<T>(
   options: FetchOptions = {}
 ): Promise<T> {
   const { method = "GET", body } = options;
-  const url = `${BASE_API_URL}${path}`;
+  const url = `${HREP_API_BASE_URL}${path}`;
 
   const fetchOptions: RequestInit = {
     method,

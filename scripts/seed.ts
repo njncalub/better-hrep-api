@@ -20,7 +20,7 @@ try {
   // Ignore if .env doesn't exist (e.g., in CI)
 }
 
-const API_BASE_URL = Deno.env.get("API_BASE_URL") || "http://localhost:8000";
+const DEPLOYED_API_BASE_URL = Deno.env.get("DEPLOYED_API_BASE_URL") || "http://localhost:8000/api";
 const INDEXER_KEY = Deno.env.get("INDEXER_KEY");
 
 if (!INDEXER_KEY) {
@@ -30,7 +30,7 @@ if (!INDEXER_KEY) {
 
 async function indexPeopleMembership() {
   console.log("\n=== Indexing People Membership ===");
-  const response = await fetch(`${API_BASE_URL}/index/people/membership`, {
+  const response = await fetch(`${DEPLOYED_API_BASE_URL}/index/people/membership`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: INDEXER_KEY }),
@@ -50,7 +50,7 @@ async function indexPeopleMembership() {
 
 async function indexPeopleInformation() {
   console.log("\n=== Indexing People Information ===");
-  const response = await fetch(`${API_BASE_URL}/index/people/information`, {
+  const response = await fetch(`${DEPLOYED_API_BASE_URL}/index/people/information`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: INDEXER_KEY }),
@@ -70,7 +70,7 @@ async function indexPeopleInformation() {
 
 async function indexCommitteesInformation() {
   console.log("\n=== Indexing Committees Information ===");
-  const response = await fetch(`${API_BASE_URL}/index/committees/information`, {
+  const response = await fetch(`${DEPLOYED_API_BASE_URL}/index/committees/information`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: INDEXER_KEY }),
@@ -90,7 +90,7 @@ async function indexCommitteesInformation() {
 
 async function crawlPeople() {
   console.log("\n=== Crawling People Pages ===");
-  console.log(`API Base URL: ${API_BASE_URL}`);
+  console.log(`API Base URL: ${DEPLOYED_API_BASE_URL}`);
 
   let page = 0;
   const limit = 25;
@@ -99,7 +99,7 @@ async function crawlPeople() {
   while (true) {
     console.log(`\nFetching page ${page}...`);
 
-    const url = `${API_BASE_URL}/people?page=${page}&limit=${limit}`;
+    const url = `${DEPLOYED_API_BASE_URL}/people?page=${page}&limit=${limit}`;
 
     try {
       const response = await fetch(url);
@@ -151,7 +151,7 @@ if (!operation) {
 }
 
 console.log(`Starting seed operation: ${operation}`);
-console.log(`API Base URL: ${API_BASE_URL}`);
+console.log(`API Base URL: ${DEPLOYED_API_BASE_URL}`);
 
 let success = false;
 
