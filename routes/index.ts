@@ -660,8 +660,7 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
             if (!seenBills.has(bill.bill_no)) {
               atomic.set(
                 ["congresses", congress, bill.bill_no, "coAuthors", personId],
-                true,
-                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+                true
               );
               indexed++;
               totalBills++;
@@ -750,8 +749,7 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
             if (!seenBills.has(bill.bill_no)) {
               atomic.set(
                 ["congresses", congress, bill.bill_no, "coAuthors", member.author_id],
-                true,
-                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+                true
               );
               indexed++;
               totalBills++;
@@ -850,8 +848,7 @@ indexRouter.openapi(indexAuthorsRoute, async (c) => {
             if (!seenBills.has(bill.bill_no)) {
               atomic.set(
                 ["congresses", congress, bill.bill_no, "authors", personId],
-                true,
-                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+                true
               );
               indexed++;
               totalBills++;
@@ -940,8 +937,7 @@ indexRouter.openapi(indexAuthorsRoute, async (c) => {
             if (!seenBills.has(bill.bill_no)) {
               atomic.set(
                 ["congresses", congress, bill.bill_no, "authors", member.author_id],
-                true,
-                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+                true
               );
               indexed++;
               totalBills++;

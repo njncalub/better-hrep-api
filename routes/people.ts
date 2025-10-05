@@ -1,7 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import {
   fetchHouseMembers,
-  fetchCoAuthoredBills,
   fetchCommitteeMembership,
   fetchBillsSearch,
   fetchCongressReference,
@@ -115,116 +114,22 @@ const personByIdRoute = createRoute({
 
 /**
  * Transform source API data to cleaned API format
- * Also caches document authorship to KV for use in /congresses endpoints
+ * Reads from cache populated by indexing endpoints
  */
 async function transformHouseMember(member: HouseMemberItem, latestCongress: number, kv: Deno.Kv): Promise<Person> {
   try {
-    // Get congress memberships from cache
-    const membershipEntry = await kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]);
+    // Get all data from cache (populated by indexing endpoints)
+    const [membershipEntry, authoredEntry, coAuthoredEntry, committeesEntry] = await Promise.all([
+      kv.get<number[]>(["people", "byPersonId", member.author_id, "membership"]),
+      kv.get<Document[]>(["people", "byPersonId", member.author_id, "authoredDocuments"]),
+      kv.get<Document[]>(["people", "byPersonId", member.author_id, "coAuthoredDocuments"]),
+      kv.get<Committee[]>(["people", "byPersonId", member.author_id, "committees"]),
+    ]);
+
     const congresses = membershipEntry.value ?? [];
-
-    // Fetch co-authored bills for this member
-    let coAuthoredDocuments: Document[] = [];
-    try {
-      const coAuthorResponse = await fetchCoAuthoredBills(member.author_id);
-      if (coAuthorResponse.success && coAuthorResponse.data?.rows) {
-        coAuthoredDocuments = coAuthorResponse.data.rows.map((bill) => ({
-          congress: mapCongressId(bill.congress),
-          documentKey: bill.bill_no,
-        }));
-      }
-    } catch (error) {
-      // If co-author endpoint fails, just return empty array
-      console.error(`Failed to fetch co-authored bills for ${member.author_id}:`, error);
-    }
-
-    // Map authored documents
-    const authoredDocuments: Document[] =
-      member.principal_authored_bills?.map((bill) => ({
-        congress: mapCongressId(bill.congress),
-        documentKey: bill.bill_no,
-      })) ?? [];
-
-    // Cache document authorship for /congresses endpoints using atomic batch operations
-    // TTL: 5 days for latest congress, no expiration for older congresses
-    const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
-
-    try {
-      // Batch all writes into a single atomic operation
-      const atomic = kv.atomic();
-
-      // Cache authored documents
-      for (const doc of authoredDocuments) {
-        const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
-        atomic.set(
-          ["congresses", doc.congress, doc.documentKey, "authors", member.author_id],
-          true,
-          expireIn ? { expireIn } : {}
-        );
-      }
-
-      // Cache co-authored documents
-      for (const doc of coAuthoredDocuments) {
-        const expireIn = doc.congress === latestCongress ? FIVE_DAYS_MS : undefined;
-        atomic.set(
-          ["congresses", doc.congress, doc.documentKey, "coAuthors", member.author_id],
-          true,
-          expireIn ? { expireIn } : {}
-        );
-      }
-
-      // Commit all writes in a single operation
-      await atomic.commit();
-    } catch (error) {
-      console.error(`Failed to cache documents for ${member.author_id}:`, error);
-    }
-
-    // Fetch committee memberships for this member
-    let committees: Committee[] = [];
-    try {
-      const committeeResponse = await fetchCommitteeMembership(member.author_id);
-      if (committeeResponse.success && committeeResponse.data?.rows) {
-        committees = committeeResponse.data.rows.map((committee) => ({
-          congress: mapCongressId(committee.congress),
-          committeeId: committee.committee_code,
-          name: committee.name,
-          position: committee.title,
-          journalNo: committee.journal_no,
-        }));
-      }
-    } catch (error) {
-      // If committee endpoint fails, just return empty array
-      console.error(`Failed to fetch committees for ${member.author_id}:`, error);
-    }
-
-    // Cache the full document arrays and committees for /people/{personId} endpoint
-    // TTL: 1 day for faster responses
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    try {
-      const cacheAtomic = kv.atomic();
-
-      cacheAtomic.set(
-        ["people", "byPersonId", member.author_id, "authoredDocuments"],
-        authoredDocuments,
-        { expireIn: ONE_DAY_MS }
-      );
-
-      cacheAtomic.set(
-        ["people", "byPersonId", member.author_id, "coAuthoredDocuments"],
-        coAuthoredDocuments,
-        { expireIn: ONE_DAY_MS }
-      );
-
-      cacheAtomic.set(
-        ["people", "byPersonId", member.author_id, "committees"],
-        committees,
-        { expireIn: ONE_DAY_MS }
-      );
-
-      await cacheAtomic.commit();
-    } catch (error) {
-      console.error(`Failed to cache full person data for ${member.author_id}:`, error);
-    }
+    const authoredDocuments = authoredEntry.value ?? [];
+    const coAuthoredDocuments = coAuthoredEntry.value ?? [];
+    const committees = committeesEntry.value ?? [];
 
     return {
       id: member.id,
