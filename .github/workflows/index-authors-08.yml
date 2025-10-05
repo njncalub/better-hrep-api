@@ -1,4 +1,4 @@
-name: Index Authors - Congress 8
+name: Index Authors - Congress 08
 
 on:
   workflow_dispatch: # Manual triggering only (historical data)
@@ -20,8 +20,6 @@ jobs:
         env:
           DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
           INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
-          HREP_API_BASE_URL: ${{ secrets.HREP_API_BASE_URL }}
-          X_HREP_WEBSITE_BACKEND: ${{ secrets.X_HREP_WEBSITE_BACKEND }}
         run: deno task seed index-authors 8
 
       - name: Notify Success

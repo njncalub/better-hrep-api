@@ -24,16 +24,9 @@ try {
 
 const DEPLOYED_API_BASE_URL = Deno.env.get("DEPLOYED_API_BASE_URL") || "http://localhost:8000/api";
 const INDEXER_KEY = Deno.env.get("INDEXER_KEY");
-const HREP_API_BASE_URL = Deno.env.get("HREP_API_BASE_URL");
-const X_HREP_WEBSITE_BACKEND = Deno.env.get("X_HREP_WEBSITE_BACKEND");
 
 if (!INDEXER_KEY) {
   console.error("Error: INDEXER_KEY environment variable is required");
-  Deno.exit(1);
-}
-
-if (!HREP_API_BASE_URL || !X_HREP_WEBSITE_BACKEND) {
-  console.error("Error: HREP_API_BASE_URL and X_HREP_WEBSITE_BACKEND environment variables are required");
   Deno.exit(1);
 }
 
@@ -147,47 +140,35 @@ async function crawlPeople() {
 async function indexCoAuthors(congress: number) {
   console.log(`\n=== Indexing Co-Authors for Congress ${congress} (using /bills/search) ===`);
 
-  // Fetch the list of all people from HREP API
-  console.log("Fetching people list from HREP API...");
-  const ddlResponse = await fetch(`${HREP_API_BASE_URL}/house-members/ddl-reference`, {
-    headers: {
-      "X-HREP-WEBSITE-BACKEND": X_HREP_WEBSITE_BACKEND!,
-    },
-  });
+  // Fetch congress membership data from our own API
+  console.log("Fetching people list from API...");
+  const infoResponse = await fetch(`${DEPLOYED_API_BASE_URL}/info/people`);
 
-  if (!ddlResponse.ok) {
-    console.error(`Failed to fetch people list: ${ddlResponse.status} ${ddlResponse.statusText}`);
+  if (!infoResponse.ok) {
+    console.error(`Failed to fetch people list: ${infoResponse.status} ${infoResponse.statusText}`);
     return false;
   }
 
-  const ddlData = await ddlResponse.json();
+  const infoData = await infoResponse.json();
 
-  if (!ddlData.success || !ddlData.data) {
+  if (!infoData.success || !infoData.data) {
     console.error("Failed to fetch people list: API returned error");
     return false;
   }
 
-  // Import mapCongressId to normalize congress IDs
-  const { mapCongressId } = await import("../lib/congress-mapper.ts");
+  // Get array of person IDs for this congress
+  const personIds = infoData.data[congress.toString()] ?? [];
 
-  // Filter to only people who are members of the specified congress
-  const allPeople = ddlData.data;
-  const people = allPeople.filter((person: any) =>
-    person.membership.map(mapCongressId).includes(congress)
-  );
-
-  console.log(`Found ${people.length} people (out of ${allPeople.length} total) who are members of congress ${congress}`);
+  console.log(`Found ${personIds.length} people who are members of congress ${congress}`);
 
   let totalIndexed = 0;
   let processedCount = 0;
 
   // Process each person individually
-  for (const person of people) {
+  for (const personId of personIds) {
     processedCount++;
-    const personId = person.author_id;
-    const fullName = person.fullname;
 
-    console.log(`\n[${processedCount}/${people.length}] Processing ${personId} (${fullName})...`);
+    console.log(`\n[${processedCount}/${personIds.length}] Processing ${personId}...`);
 
     const response = await fetch(`${DEPLOYED_API_BASE_URL}/index/documents/coauthors`, {
       method: "POST",
@@ -220,47 +201,35 @@ async function indexCoAuthors(congress: number) {
 async function indexAuthors(congress: number) {
   console.log(`\n=== Indexing Authors for Congress ${congress} (using /bills/search) ===`);
 
-  // Fetch the list of all people from HREP API
-  console.log("Fetching people list from HREP API...");
-  const ddlResponse = await fetch(`${HREP_API_BASE_URL}/house-members/ddl-reference`, {
-    headers: {
-      "X-HREP-WEBSITE-BACKEND": X_HREP_WEBSITE_BACKEND!,
-    },
-  });
+  // Fetch congress membership data from our own API
+  console.log("Fetching people list from API...");
+  const infoResponse = await fetch(`${DEPLOYED_API_BASE_URL}/info/people`);
 
-  if (!ddlResponse.ok) {
-    console.error(`Failed to fetch people list: ${ddlResponse.status} ${ddlResponse.statusText}`);
+  if (!infoResponse.ok) {
+    console.error(`Failed to fetch people list: ${infoResponse.status} ${infoResponse.statusText}`);
     return false;
   }
 
-  const ddlData = await ddlResponse.json();
+  const infoData = await infoResponse.json();
 
-  if (!ddlData.success || !ddlData.data) {
+  if (!infoData.success || !infoData.data) {
     console.error("Failed to fetch people list: API returned error");
     return false;
   }
 
-  // Import mapCongressId to normalize congress IDs
-  const { mapCongressId } = await import("../lib/congress-mapper.ts");
+  // Get array of person IDs for this congress
+  const personIds = infoData.data[congress.toString()] ?? [];
 
-  // Filter to only people who are members of the specified congress
-  const allPeople = ddlData.data;
-  const people = allPeople.filter((person: any) =>
-    person.membership.map(mapCongressId).includes(congress)
-  );
-
-  console.log(`Found ${people.length} people (out of ${allPeople.length} total) who are members of congress ${congress}`);
+  console.log(`Found ${personIds.length} people who are members of congress ${congress}`);
 
   let totalIndexed = 0;
   let processedCount = 0;
 
   // Process each person individually
-  for (const person of people) {
+  for (const personId of personIds) {
     processedCount++;
-    const personId = person.author_id;
-    const fullName = person.fullname;
 
-    console.log(`\n[${processedCount}/${people.length}] Processing ${personId} (${fullName})...`);
+    console.log(`\n[${processedCount}/${personIds.length}] Processing ${personId}...`);
 
     const response = await fetch(`${DEPLOYED_API_BASE_URL}/index/documents/authors`, {
       method: "POST",

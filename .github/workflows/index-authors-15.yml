@@ -20,8 +20,6 @@ jobs:
         env:
           DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
           INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
-          HREP_API_BASE_URL: ${{ secrets.HREP_API_BASE_URL }}
-          X_HREP_WEBSITE_BACKEND: ${{ secrets.X_HREP_WEBSITE_BACKEND }}
         run: deno task seed index-authors 15
 
       - name: Notify Success

@@ -7,6 +7,7 @@ import { peopleRouter } from "./routes/people.ts";
 import { committeesRouter } from "./routes/committees.ts";
 import { indexRouter } from "./routes/index.ts";
 import { cachedRouter } from "./routes/cached.ts";
+import { infoRouter } from "./routes/info.ts";
 import { pages } from "./routes/pages.tsx";
 
 const app = new Hono();
@@ -22,6 +23,7 @@ apiApp.route("/", peopleRouter);
 apiApp.route("/", committeesRouter);
 apiApp.route("/", indexRouter);
 apiApp.route("/", cachedRouter);
+apiApp.route("/", infoRouter);
 
 // The OpenAPI documentation will be available at /api/doc
 apiApp.doc("/doc", {
