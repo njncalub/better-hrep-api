@@ -1,4 +1,4 @@
-import "jsr:@std/dotenv/load";
+import "@std/dotenv/load";
 import type {
   CongressReferenceResponse,
   HouseMembersResponse,

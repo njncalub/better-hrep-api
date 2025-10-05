@@ -15,7 +15,7 @@
 
 // Only load .env if running locally (file exists)
 try {
-  await import("jsr:@std/dotenv/load");
+  await import("@std/dotenv/load");
 } catch {
   // Ignore if .env doesn't exist (e.g., in CI)
 }
@@ -172,7 +172,7 @@ switch (operation) {
     success = await crawlPeople();
     break;
 
-  case "all":
+  case "all": {
     console.log("Running all seeding operations...");
     const membership = await indexPeopleMembership();
     const information = await indexPeopleInformation();
@@ -180,6 +180,7 @@ switch (operation) {
     const crawl = await crawlPeople();
     success = membership && information && committees && crawl;
     break;
+  }
 
   default:
     console.error(`Error: Unknown operation "${operation}"`);

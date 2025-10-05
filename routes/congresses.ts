@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { fetchCongressReference, fetchBillsList, fetchBillByDocumentKey } from "../lib/api-client.ts";
 import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
 import { openKv } from "../lib/kv.ts";
-import { CongressListSchema, type Congress, PaginatedDocumentsSchema, DocumentInfoSchema, type DocumentInfo, type Reading, type Referral } from "../types/api.ts";
+import { CongressListSchema, type Congress, PaginatedDocumentsSchema, DocumentInfoSchema, type DocumentInfo } from "../types/api.ts";
 import type { CongressReferenceItem, BillListItem } from "../types/source.ts";
 
 const congressesRoute = createRoute({

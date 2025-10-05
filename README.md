@@ -31,13 +31,40 @@ irm https://deno.land/install.ps1 | iex
    deno task start
    ```
 
-4. Visit `http://localhost:8000` to see the Swagger UI documentation.
+4. Visit the application:
+   - **Web Interface**: `http://localhost:8000` - Browse congresses, bills, representatives, and committees
+   - **API Documentation**: `http://localhost:8000/api` - Swagger UI for the REST API
+
+## Web Interface
+
+The application includes a user-friendly web interface for browsing legislative data:
+
+### Pages
+
+- **`/`** - Homepage with navigation to all sections
+- **`/congresses`** - Browse all Philippine congressional sessions
+- **`/congresses/:congressNumber`** - View bills for a specific congress (with pagination)
+- **`/congresses/:congressNumber/bills/:documentKey`** - Permalink for a specific bill with full details
+- **`/people`** - Browse all House representatives (with pagination)
+- **`/people/:personId`** - Permalink for a specific representative with their bills and committees
+- **`/committees`** - Browse all House committees (with pagination)
+- **`/committees/:committeeId`** - Permalink for a specific committee
+
+### Features
+
+- Clean, responsive design using [Pico CSS](https://picocss.com/)
+- Server-side rendered pages with Hono JSX
+- Pagination support for large datasets
+- Permalinks for all entities (bills, people, committees)
+- Links between related data (bills ↔ authors, people ↔ committees)
 
 ## API Endpoints
 
+All API endpoints are now prefixed with `/api`. For programmatic access, use these endpoints.
+
 ### Public Endpoints
 
-#### GET /congresses
+#### GET /api/congresses
 
 Returns a list of all congresses, sorted by congress number (descending).
 
@@ -57,7 +84,7 @@ Returns a list of all congresses, sorted by congress number (descending).
 
 **Note:** The original API uses ID `103` for the 20th Congress. This is automatically normalized to `20`.
 
-#### GET /congresses/:congressNumber/documents
+#### GET /api/congresses/:congressNumber/documents
 
 Returns a paginated list of bills/documents for a specific congress.
 
@@ -69,7 +96,7 @@ Returns a paginated list of bills/documents for a specific congress.
 - `limit` (optional): Items per page. Default: `10`
 - `filter` (optional): Search filter. Default: `""`
 
-**Example:** `GET /congresses/20/documents?page=0&limit=10&filter=education`
+**Example:** `GET /api/congresses/20/documents?page=0&limit=10&filter=education`
 
 **Response:**
 ```json
@@ -121,9 +148,9 @@ Returns a paginated list of bills/documents for a specific congress.
 }
 ```
 
-**Note:** Author/co-author information comes from the document authorship cache, which is populated by the `/people` endpoint. This ensures consistent author data across all documents. The endpoint fetches bill data from the source API and enriches it with cached authorship information.
+**Note:** Author/co-author information comes from the document authorship cache, which is populated by the `/api/people` endpoint. This ensures consistent author data across all documents. The endpoint fetches bill data from the source API and enriches it with cached authorship information.
 
-#### GET /congresses/:congressNumber/documents/:documentKey
+#### GET /api/congresses/:congressNumber/documents/:documentKey
 
 Returns details for a specific bill/document.
 
@@ -131,7 +158,7 @@ Returns details for a specific bill/document.
 - `congressNumber`: Congress number (e.g., `20` for 20th Congress)
 - `documentKey`: Document key (e.g., `HB00001`)
 
-**Example:** `GET /congresses/20/documents/HB00001`
+**Example:** `GET /api/congresses/20/documents/HB00001`
 
 **Response:**
 ```json
@@ -177,7 +204,7 @@ Returns details for a specific bill/document.
 
 **Note:** Uses the `/bills/search` endpoint from the source API with the document key. Returns 404 if the document is not found.
 
-#### GET /people
+#### GET /api/people
 
 Returns a paginated list of house members with their authored bills, co-authored bills, and committees.
 
@@ -185,7 +212,7 @@ Returns a paginated list of house members with their authored bills, co-authored
 - `page` (optional): Page number, 0-indexed. Default: `0`
 - `limit` (optional): Items per page. Default: `100`
 
-**Example:** `GET /people?page=0&limit=10`
+**Example:** `GET /api/people?page=0&limit=10`
 
 **Response:**
 ```json
@@ -232,14 +259,14 @@ Returns a paginated list of house members with their authored bills, co-authored
 }
 ```
 
-#### GET /people/:personId
+#### GET /api/people/:personId
 
 Returns details for a specific house member by their person ID.
 
 **Path Parameters:**
 - `personId`: Unique person identifier (e.g., `E001`)
 
-**Example:** `GET /people/E001`
+**Example:** `GET /api/people/E001`
 
 **Response:**
 ```json
@@ -258,7 +285,7 @@ Returns details for a specific house member by their person ID.
 }
 ```
 
-#### GET /committees
+#### GET /api/committees
 
 Returns a paginated list of committees with their information.
 
@@ -266,7 +293,7 @@ Returns a paginated list of committees with their information.
 - `page` (optional): Page number, 0-indexed. Default: `0`
 - `limit` (optional): Items per page. Default: `100`
 
-**Example:** `GET /committees?page=0&limit=10`
+**Example:** `GET /api/committees?page=0&limit=10`
 
 **Response:**
 ```json
@@ -293,7 +320,7 @@ Returns a paginated list of committees with their information.
 
 These endpoints require authentication via the `INDEXER_KEY` environment variable.
 
-#### POST /index/people/membership
+#### POST /api/index/people/membership
 
 Indexes people membership data to KV cache from `/house-members/ddl-reference`.
 
@@ -312,7 +339,7 @@ Indexes people membership data to KV cache from `/house-members/ddl-reference`.
 }
 ```
 
-#### POST /index/people/information
+#### POST /api/index/people/information
 
 Indexes people information data to KV cache from `/house-members/list`.
 
@@ -331,7 +358,7 @@ Indexes people information data to KV cache from `/house-members/list`.
 }
 ```
 
-#### POST /index/committees/information
+#### POST /api/index/committees/information
 
 Indexes committee information to KV cache from `/committee/list`.
 
@@ -354,7 +381,7 @@ Indexes committee information to KV cache from `/committee/list`.
 
 These endpoints allow you to inspect what's currently in the KV cache. They require authentication via the `INDEXER_KEY` environment variable.
 
-#### POST /cached/people/byFullName
+#### POST /api/cached/people/byFullName
 
 Returns all people cache entries indexed by full name.
 
@@ -382,7 +409,7 @@ Returns all people cache entries indexed by full name.
 }
 ```
 
-#### POST /cached/people/byNameCode
+#### POST /api/cached/people/byNameCode
 
 Returns all people cache entries indexed by name code.
 
@@ -410,7 +437,7 @@ Returns all people cache entries indexed by name code.
 }
 ```
 
-**Note:** These endpoints are useful for debugging author lookup issues in `/congresses/:congressNumber/documents`.
+**Note:** These endpoints are useful for debugging author lookup issues in `/api/congresses/:congressNumber/documents`.
 
 ## Development
 
@@ -459,7 +486,7 @@ These are the original HREP API endpoints that this proxy wraps. You can test th
 
 Returns congress session reference data used for dropdown filters.
 
-**Proxied by:** `GET /congresses`
+**Proxied by:** `GET /api/congresses`
 
 **Example:**
 ```bash
@@ -475,7 +502,7 @@ deno task fetch /system-config/reference-congress
 
 Returns a paginated list of house members with their details and principal authored bills.
 
-**Proxied by:** `GET /people`
+**Proxied by:** `GET /api/people`
 
 **Payload:**
 ```json
@@ -501,7 +528,7 @@ deno task fetch /house-members/list POST '{"page":0,"limit":10,"filter":""}'
 
 Returns a paginated list of bills principally authored by a specific house member.
 
-**Proxied by:** `GET /people` and `GET /people/:personId`
+**Proxied by:** `GET /api/people` and `GET /api/people/:personId`
 
 **Payload:**
 ```json
@@ -529,7 +556,7 @@ deno task fetch /house-members/principal-author POST '{"page":0,"limit":10,"filt
 
 Returns a paginated list of bills co-authored by a specific house member.
 
-**Proxied by:** `GET /people` (included in response)
+**Proxied by:** `GET /api/people` (included in response)
 
 **Payload:**
 ```json
@@ -557,7 +584,7 @@ deno task fetch /house-members/co-author POST '{"page":0,"limit":10,"filter":"",
 
 Returns committee memberships for a specific house member.
 
-**Proxied by:** `GET /people` (included in response)
+**Proxied by:** `GET /api/people` (included in response)
 
 **Payload:**
 ```json
@@ -606,7 +633,7 @@ deno task fetch /house-members/committee-membership POST '{"member_code":"E001"}
 
 Returns a simplified list of house members with their congress memberships. Used for dropdown lists (DDL = Drop Down List).
 
-**Proxied by:** `POST /index/people/membership` (for caching)
+**Proxied by:** `POST /api/index/people/membership` (for caching)
 
 **Example:**
 ```bash
@@ -640,7 +667,7 @@ deno task fetch /house-members/ddl-reference
 
 Searches for bills with advanced filtering options. This is the most reliable endpoint for fetching authored and co-authored bills.
 
-**Proxied by:** `GET /people`, `GET /people/:personId` (for documents), and `GET /congresses/:congressNumber/documents/:documentKey`
+**Proxied by:** `GET /api/people`, `GET /api/people/:personId` (for documents), and `GET /api/congresses/:congressNumber/documents/:documentKey`
 
 **Payload:**
 ```json
@@ -688,7 +715,7 @@ deno task fetch /bills/search POST '{"page":0,"limit":999,"congress":103,"signif
 
 Returns a paginated list of committees with their details.
 
-**Proxied by:** `POST /index/committees/information` (for caching)
+**Proxied by:** `POST /api/index/committees/information` (for caching)
 
 **Payload:**
 ```json

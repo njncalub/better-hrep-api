@@ -43,6 +43,16 @@ const committeeListRoute = createRoute({
       },
       description: "List of committees",
     },
+    500: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Internal server error",
+    },
   },
   tags: ["Committees"],
   summary: "Get all committees",
@@ -82,6 +92,16 @@ const committeeByIdRoute = createRoute({
         },
       },
       description: "Committee not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Internal server error",
     },
   },
   tags: ["Committees"],
@@ -147,7 +167,7 @@ committeesRouter.openapi(committeeListRoute, async (c) => {
       total,
       totalPages,
       data,
-    });
+    }, 200);
   } catch (error) {
     console.error("Error fetching committees:", error);
     return c.json({ error: "Failed to fetch committees" }, 500);
@@ -186,7 +206,7 @@ committeesRouter.openapi(committeeByIdRoute, async (c) => {
       jurisdiction: committee.jurisdiction,
       location: committee.location,
       type: committee.type_desc,
-    });
+    }, 200);
   } catch (error) {
     console.error("Error fetching committee:", error);
     return c.json({ error: "Failed to fetch committee" }, 500);
