@@ -3,7 +3,7 @@ import { trimTrailingSlash } from "hono/trailing-slash";
 import { Layout } from "../components/Layout.tsx";
 import { PersonCard } from "../components/PersonCard.tsx";
 import { CongressBadges } from "../components/CongressBadges.tsx";
-import type { Congress, PaginatedDocuments, DocumentInfo, PaginatedPeople, Person, PaginatedCommittees } from "../types/api.ts";
+import type { Congress, PaginatedDocuments, DocumentInfo, PaginatedPeople, Person, PaginatedCommittees, CommitteeInfo } from "../types/api.ts";
 
 const pages = new Hono();
 
@@ -404,11 +404,71 @@ pages.get("/committees", async (c) => {
 pages.get("/committees/:committeeId", async (c) => {
   const committeeId = c.req.param("committeeId");
 
-  // For now, we need to fetch from the list since there's no single committee endpoint
-  const committees = await fetchAPI<PaginatedCommittees>(c, `/committees?page=0&limit=999`);
-  const committee = committees.data.find((c) => c.committeeId === committeeId);
+  try {
+    const committee = await fetchAPI<CommitteeInfo>(c, `/committees/${committeeId}`);
 
-  if (!committee) {
+    // Group documents by congress
+    const documentsByCongress: Record<number, Array<{ congress: number; documentKey: string }>> = {};
+
+    if (committee.documents) {
+      for (const doc of committee.documents) {
+        if (!documentsByCongress[doc.congress]) {
+          documentsByCongress[doc.congress] = [];
+        }
+        documentsByCongress[doc.congress].push(doc);
+      }
+    }
+
+    // Sort congress numbers in descending order
+    const sortedCongresses = Object.keys(documentsByCongress)
+      .map(Number)
+      .sort((a, b) => b - a);
+
+    return c.html(
+      <Layout title={committee.name + " - Better HREP API"}>
+        <nav>
+          <a href="/committees">← Back to Committees</a>
+        </nav>
+
+        <h1>{committee.name}</h1>
+        <p class="meta">Committee ID: {committee.committeeId}</p>
+        <p class="meta">{committee.type}</p>
+
+        {committee.jurisdiction && (
+          <>
+            <h2>Jurisdiction</h2>
+            <p>{committee.jurisdiction}</p>
+          </>
+        )}
+
+        <h2>Contact Information</h2>
+        <ul>
+          {committee.phone && <li><strong>Phone:</strong> {committee.phone}</li>}
+          {committee.location && <li><strong>Location:</strong> {committee.location}</li>}
+        </ul>
+
+        {committee.documents && committee.documents.length > 0 && (
+          <>
+            <h2>Documents ({committee.documents.length})</h2>
+            {sortedCongresses.map((congress) => (
+              <div key={congress}>
+                <h3>Congress {congress} ({documentsByCongress[congress].length})</h3>
+                <ul>
+                  {documentsByCongress[congress].map((doc) => (
+                    <li key={doc.documentKey}>
+                      <a href={`/congresses/${doc.congress}/documents/${doc.documentKey}`}>
+                        {doc.documentKey}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </>
+        )}
+      </Layout>
+    );
+  } catch (error) {
     return c.html(
       <Layout title="Committee Not Found - Better HREP API">
         <h1>Committee Not Found</h1>
@@ -418,31 +478,6 @@ pages.get("/committees/:committeeId", async (c) => {
       404
     );
   }
-
-  return c.html(
-    <Layout title={committee.name + " - Better HREP API"}>
-      <nav>
-        <a href="/committees">← Back to Committees</a>
-      </nav>
-
-      <h1>{committee.name}</h1>
-      <p class="meta">Committee ID: {committee.committeeId}</p>
-      <p class="meta">{committee.type}</p>
-
-      {committee.jurisdiction && (
-        <>
-          <h2>Jurisdiction</h2>
-          <p>{committee.jurisdiction}</p>
-        </>
-      )}
-
-      <h2>Contact Information</h2>
-      <ul>
-        {committee.phone && <li><strong>Phone:</strong> {committee.phone}</li>}
-        {committee.location && <li><strong>Location:</strong> {committee.location}</li>}
-      </ul>
-    </Layout>
-  );
 });
 
 export { pages };

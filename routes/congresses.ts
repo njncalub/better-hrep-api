@@ -216,14 +216,56 @@ async function transformAuthor(
 }
 
 /**
+ * Helper function to transform committee data with committee information
+ * Looks up committee by committeeId directly
+ */
+async function transformCommittee(
+  kv: Deno.Kv,
+  committeeId: string
+) {
+  const committeeInfoResult = await kv.get([
+    "committees",
+    "byCommitteeId",
+    committeeId,
+    "information",
+  ]);
+
+  if (committeeInfoResult.value) {
+    const committeeInfo = committeeInfoResult.value as {
+      id: number;
+      code: string;
+      name: string;
+      phone: string | null;
+      jurisdiction: string | null;
+      location: string | null;
+      type_desc: string;
+    };
+
+    return {
+      committeeId: committeeInfo.code,
+      id: committeeInfo.id,
+      name: committeeInfo.name,
+      phone: committeeInfo.phone,
+      jurisdiction: committeeInfo.jurisdiction,
+      location: committeeInfo.location,
+      type_desc: committeeInfo.type_desc,
+    };
+  }
+
+  // If committeeId lookup fails, return null (will be filtered out)
+  return null;
+}
+
+/**
  * Transform source BillListItem to DocumentInfo
- * Note: Uses KV cache for consistent author/coauthor data
+ * Note: Uses KV cache for consistent author/coauthor/committee data
  */
 async function transformBillToDocument(
   bill: BillListItem,
   kv: Deno.Kv,
   authorPersonIds: string[],
-  coAuthorPersonIds: string[]
+  coAuthorPersonIds: string[],
+  committeeIds: string[]
 ): Promise<DocumentInfo> {
   const normalizedCongress = mapCongressId(bill.congress);
 
@@ -235,6 +277,11 @@ async function transformBillToDocument(
   // Build coAuthors array from cached person IDs
   const coAuthors = await Promise.all(
     coAuthorPersonIds.map((personId) => transformAuthor(kv, personId))
+  );
+
+  // Build committees array from cached committee IDs
+  const committees = await Promise.all(
+    committeeIds.map((committeeId) => transformCommittee(kv, committeeId))
   );
 
   return {
@@ -250,6 +297,7 @@ async function transformBillToDocument(
     downloadUrl: bill.text_as_filed,
     authors: authors.filter((a): a is NonNullable<typeof a> => a !== null),
     coAuthors: coAuthors.filter((a): a is NonNullable<typeof a> => a !== null),
+    committees: committees.filter((c): c is NonNullable<typeof c> => c !== null),
     billType: bill.bill_type,
     significance: bill.significance_desc,
   };
@@ -330,7 +378,20 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
           }
         }
 
-        return transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds);
+        // List all committees for this document
+        const committeesIter = kv.list({
+          prefix: ["congresses", congressNum, bill.bill_no, "committees"]
+        });
+        const committeeIds: string[] = [];
+        for await (const entry of committeesIter) {
+          if (entry.value === true) {
+            // Key format: ["congresses", congress, documentKey, "committees", committeeId]
+            const committeeId = entry.key[4] as string;
+            committeeIds.push(committeeId);
+          }
+        }
+
+        return transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds, committeeIds);
       })
     );
 
@@ -410,7 +471,20 @@ congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
       }
     }
 
-    const document = await transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds);
+    // List all committees for this document
+    const committeesIter = kv.list({
+      prefix: ["congresses", congressNum, documentKey, "committees"]
+    });
+    const committeeIds: string[] = [];
+    for await (const entry of committeesIter) {
+      if (entry.value === true) {
+        // Key format: ["congresses", congress, documentKey, "committees", committeeId]
+        const committeeId = entry.key[4] as string;
+        committeeIds.push(committeeId);
+      }
+    }
+
+    const document = await transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds, committeeIds);
 
     await kv.close();
 

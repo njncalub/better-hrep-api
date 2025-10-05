@@ -216,6 +216,13 @@ export const CommitteeInfoSchema = z
       example: "Standing Committees",
       description: "Committee type description",
     }),
+    documents: z.array(DocumentSchema).openapi({
+      example: [
+        { congress: 20, documentKey: "HB00001" },
+        { congress: 20, documentKey: "HB00123" },
+      ],
+      description: "List of documents referred to this committee",
+    }),
   })
   .openapi("CommitteeInfo");
 
@@ -330,6 +337,44 @@ export const AuthorSchema = z
 export type Author = z.infer<typeof AuthorSchema>;
 
 /**
+ * Committee information in document context
+ */
+export const CommitteeInDocumentSchema = z
+  .object({
+    committeeId: z.string().openapi({
+      example: "0543",
+      description: "Committee code/ID",
+    }),
+    id: z.number().openapi({
+      example: 40,
+      description: "Committee database ID",
+    }),
+    name: z.string().openapi({
+      example: "YOUTH AND SPORTS DEVELOPMENT",
+      description: "Committee name",
+    }),
+    phone: z.string().nullable().openapi({
+      example: "(02) 8-9514326",
+      description: "Committee phone number",
+    }),
+    jurisdiction: z.string().nullable().openapi({
+      example: "Youth and sports development programs",
+      description: "Committee jurisdiction",
+    }),
+    location: z.string().nullable().openapi({
+      example: "Room 305, South Wing",
+      description: "Committee office location",
+    }),
+    type_desc: z.string().openapi({
+      example: "Standing Committee",
+      description: "Committee type description",
+    }),
+  })
+  .openapi("CommitteeInDocument");
+
+export type CommitteeInDocument = z.infer<typeof CommitteeInDocumentSchema>;
+
+/**
  * Document/Bill detailed information
  */
 export const DocumentInfoSchema = z
@@ -387,6 +432,20 @@ export const DocumentInfoSchema = z
         { keyName: "RIVERA, NOEL \"Bong\" N.", keyNameCode: "Rivera" },
       ],
       description: "List of co-authors",
+    }),
+    committees: z.array(CommitteeInDocumentSchema).openapi({
+      example: [
+        {
+          committeeId: "0543",
+          id: 40,
+          name: "YOUTH AND SPORTS DEVELOPMENT",
+          phone: "(02) 8-9514326",
+          jurisdiction: null,
+          location: null,
+          type_desc: "Standing Committee",
+        },
+      ],
+      description: "List of committees",
     }),
     billType: z.string().openapi({
       example: "House Bill",

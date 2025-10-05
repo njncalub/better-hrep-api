@@ -1,0 +1,31 @@
+name: Index Committees - Congress 09
+
+on:
+  workflow_dispatch: # Manual triggering only (historical data)
+
+jobs:
+  index-committees-9:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Index Committees for Congress 9
+        env:
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+        run: deno task seed index-committees 9
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Committees indexing for Congress 9 completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Committees indexing for Congress 9 failed"

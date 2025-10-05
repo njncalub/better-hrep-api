@@ -62,6 +62,21 @@ const IndexAuthorsRequestSchema = z.object({
   }),
 });
 
+const IndexCommitteesRequestSchema = z.object({
+  key: z.string().openapi({
+    example: "your-indexer-key",
+    description: "Indexer authentication key",
+  }),
+  congress: z.number().openapi({
+    example: 20,
+    description: "Congress number to index (normalized ID, e.g., 8-20)",
+  }),
+  committeeId: z.string().openapi({
+    example: "0543",
+    description: "Committee ID to index",
+  }),
+});
+
 const indexPeopleMembershipRoute = createRoute({
   method: "post",
   path: "/index/people/membership",
@@ -336,6 +351,56 @@ const indexAuthorsRoute = createRoute({
   tags: ["Index"],
   summary: "Index document authors data using /bills/search",
   description: "Fetches authored bills for a specific congress using POST /bills/search. Caches primary author relationships for each document. Supports processing specific person or chunking all people. Requires valid indexer key.",
+});
+
+const indexCommitteesRoute = createRoute({
+  method: "post",
+  path: "/index/documents/committees",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: IndexCommitteesRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            message: z.string(),
+            indexed: z.number(),
+          }),
+        },
+      },
+      description: "Successfully indexed committee documents data",
+    },
+    401: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Unauthorized - Invalid indexer key",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Internal server error",
+    },
+  },
+  tags: ["Index"],
+  summary: "Index committee documents data using /bills/search",
+  description: "Fetches bills for a specific committee and congress using POST /bills/search with field='Committees'. Caches committee-document relationships. Requires valid indexer key.",
 });
 
 export const indexRouter = new OpenAPIHono();
@@ -970,6 +1035,100 @@ indexRouter.openapi(indexAuthorsRoute, async (c) => {
     }
   } catch (error) {
     console.error("Error indexing authors:", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+indexRouter.openapi(indexCommitteesRoute, async (c) => {
+  try {
+    const { key, congress, committeeId } = c.req.valid("json");
+
+    // Verify indexer key
+    if (key !== INDEXER_KEY) {
+      return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
+    }
+
+    const kv = await openKv();
+    let indexed = 0;
+
+    try {
+      console.log(`Processing committee: ${committeeId} for congress ${congress}`);
+
+      const apiCongressId = mapToApiId(congress);
+      console.log(`  Fetching bills for congress ${congress} (API ID: ${apiCongressId})...`);
+
+      // Paginate through all results with limit 50
+      let page = 0;
+      let totalBills = 0;
+      const limit = 50;
+      const seenBills = new Set<string>();
+
+      while (true) {
+        const response = await fetchBillsSearch({
+          page,
+          limit,
+          congress: apiCongressId,
+          significance: "Both",
+          field: "Committees",
+          numbers: "",
+          author_id: "",
+          author_type: "Both",
+          committee_id: committeeId,
+          title: "",
+        });
+
+        if (!response.success || !response.data?.rows || response.data.rows.length === 0) {
+          break;
+        }
+
+        // Check if we've seen all bills in this page (pagination loop detection)
+        const newBillsCount = response.data.rows.filter(bill => !seenBills.has(bill.bill_no)).length;
+        if (newBillsCount === 0) {
+          console.log(`    Page ${page}: All bills already seen, stopping pagination`);
+          break;
+        }
+
+        console.log(`    Page ${page}: Found ${newBillsCount} new bills for committee (${response.data.rows.length} total in response)`);
+
+        // Cache each committee-document relationship (document-centric)
+        const atomic = kv.atomic();
+        for (const bill of response.data.rows) {
+          if (!seenBills.has(bill.bill_no)) {
+            atomic.set(
+              ["congresses", congress, bill.bill_no, "committees", committeeId],
+              true
+            );
+            indexed++;
+            totalBills++;
+            seenBills.add(bill.bill_no);
+          }
+        }
+        await atomic.commit();
+
+        page++;
+      }
+
+      console.log(`    Total: ${totalBills} bills indexed for committee ${committeeId}`);
+
+      kv.close();
+
+      return c.json(
+        {
+          message: `Successfully indexed committee ${committeeId} in congress ${congress}`,
+          indexed,
+        },
+        200
+      );
+    } catch (error) {
+      kv.close();
+      console.error("Error in inner try block:", error);
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error indexing committees:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       500

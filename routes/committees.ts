@@ -190,13 +190,43 @@ committeesRouter.openapi(committeeByIdRoute, async (c) => {
       type_desc: string;
     }>(["committees", "byCommitteeId", committeeId, "information"]);
 
-    kv.close();
-
     if (!entry.value) {
+      await kv.close();
       return c.json({ error: "Committee not found" }, 404);
     }
 
     const committee = entry.value;
+
+    // Fetch all documents associated with this committee from cache
+    // Cache key pattern: ["congresses", congress, documentKey, "committees", committeeId]
+    const documents: Array<{ congress: number; documentKey: string }> = [];
+
+    // List all entries under congresses prefix
+    const congressEntries = kv.list({ prefix: ["congresses"] });
+
+    for await (const congressEntry of congressEntries) {
+      // Key format: ["congresses", congress, documentKey, "committees", committeeId]
+      if (
+        congressEntry.key.length === 5 &&
+        congressEntry.key[3] === "committees" &&
+        congressEntry.key[4] === committeeId &&
+        congressEntry.value === true
+      ) {
+        const congress = congressEntry.key[1] as number;
+        const documentKey = congressEntry.key[2] as string;
+        documents.push({ congress, documentKey });
+      }
+    }
+
+    await kv.close();
+
+    // Sort documents by congress (descending) then by documentKey
+    documents.sort((a, b) => {
+      if (a.congress !== b.congress) {
+        return b.congress - a.congress; // Descending by congress
+      }
+      return a.documentKey.localeCompare(b.documentKey);
+    });
 
     return c.json({
       id: committee.id,
@@ -206,6 +236,7 @@ committeesRouter.openapi(committeeByIdRoute, async (c) => {
       jurisdiction: committee.jurisdiction,
       location: committee.location,
       type: committee.type_desc,
+      documents,
     }, 200);
   } catch (error) {
     console.error("Error fetching committee:", error);

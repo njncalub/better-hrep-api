@@ -1,0 +1,33 @@
+name: Index Committees - Congress 20
+
+on:
+  schedule:
+    - cron: '0 3 */2 * *'  # Every 2 days at 3:00 AM UTC (offset from authors/coauthors)
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  index-committees-20:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Index Committees for Congress 20
+        env:
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+        run: deno task seed index-committees 20
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Committees indexing for Congress 20 completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Committees indexing for Congress 20 failed"
