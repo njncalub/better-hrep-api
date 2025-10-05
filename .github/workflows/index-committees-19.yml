@@ -1,7 +1,11 @@
 name: Index Committees - Congress 19
 
 on:
-  workflow_dispatch: # Manual triggering only (historical data)
+  schedule:
+    # TODO: Temporary schedule for initial indexing - runs daily at 12:00 PM UTC
+    # Remove or adjust after initial data population is complete
+    - cron: '0 12 * * *'
+  workflow_dispatch: # Manual triggering
 
 jobs:
   index-committees-19:
@@ -20,6 +24,8 @@ jobs:
         env:
           DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
           INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: deno task seed index-committees 19
 
       - name: Notify Success

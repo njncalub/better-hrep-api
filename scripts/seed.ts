@@ -6,14 +6,13 @@
  *   deno run --allow-net --allow-env --allow-read scripts/seed.ts <operation> [congress]
  *
  * Operations:
- *   people-membership      - Index people membership data
- *   people-information     - Index people information data
- *   committees-information - Index committees information data
- *   crawl-people          - Crawl all /people pages to populate document cache
+ *   people-membership           - Index people membership data
+ *   people-information          - Index people information data
+ *   committees-information      - Index committees information data
  *   index-coauthors <congress>  - Index co-authors for specific congress (e.g., index-coauthors 20)
  *   index-authors <congress>    - Index primary authors for specific congress (e.g., index-authors 20)
  *   index-committees <congress> - Index committees for specific congress (e.g., index-committees 20)
- *   all                    - Run all seeding operations in order (except index-coauthors, index-authors, and index-committees)
+ *   all                         - Run all seeding operations in order (except index-coauthors, index-authors, and index-committees)
  */
 
 // Only load .env if running locally (file exists)
@@ -163,53 +162,6 @@ async function indexCommitteesInformation() {
 
   const result = await response.json();
   console.log(`✓ Success: Indexed ${result.indexed} committees`);
-  return true;
-}
-
-async function crawlPeople() {
-  console.log("\n=== Crawling People Pages ===");
-  console.log(`API Base URL: ${DEPLOYED_API_BASE_URL}`);
-
-  let page = 0;
-  const limit = 25;
-  let totalProcessed = 0;
-
-  while (true) {
-    console.log(`\nFetching page ${page}...`);
-
-    const url = `${DEPLOYED_API_BASE_URL}/people?page=${page}&limit=${limit}`;
-
-    try {
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        console.error(`Failed to fetch page ${page}: ${response.status} ${response.statusText}`);
-        break;
-      }
-
-      const data = await response.json();
-
-      const peopleCount = data.data?.length || 0;
-      totalProcessed += peopleCount;
-
-      console.log(`  Processed ${peopleCount} people (total: ${totalProcessed}/${data.total})`);
-
-      // Check if we've reached the end
-      if (page >= data.totalPages - 1) {
-        console.log("\nReached last page!");
-        break;
-      }
-
-      page++;
-
-    } catch (error) {
-      console.error(`Error fetching page ${page}:`, error);
-      break;
-    }
-  }
-
-  console.log(`\n✓ Crawling complete! Total people processed: ${totalProcessed}`);
-  console.log("Document authorship cache has been populated.");
   return true;
 }
 
@@ -571,7 +523,6 @@ if (!operation) {
   console.error("  people-membership      - Index people membership data");
   console.error("  people-information     - Index people information data");
   console.error("  committees-information - Index committees information data");
-  console.error("  crawl-people          - Crawl all /people pages to populate document cache");
   console.error("  index-coauthors <congress>  - Index co-authors for specific congress (e.g., index-coauthors 20)");
   console.error("  index-authors <congress>    - Index primary authors for specific congress (e.g., index-authors 20)");
   console.error("  index-committees <congress> - Index committees for specific congress (e.g., index-committees 20)");
@@ -595,10 +546,6 @@ switch (operation) {
 
   case "committees-information":
     success = await indexCommitteesInformation();
-    break;
-
-  case "crawl-people":
-    success = await crawlPeople();
     break;
 
   case "index-coauthors": {
@@ -642,14 +589,13 @@ switch (operation) {
     const membership = await indexPeopleMembership();
     const information = await indexPeopleInformation();
     const committees = await indexCommitteesInformation();
-    const crawl = await crawlPeople();
-    success = membership && information && committees && crawl;
+    success = membership && information && committees;
     break;
   }
 
   default:
     console.error(`Error: Unknown operation "${operation}"`);
-    console.error("\nAvailable operations: people-membership, people-information, committees-information, crawl-people, index-coauthors <congress>, index-authors <congress>, index-committees <congress>, all");
+    console.error("\nAvailable operations: people-membership, people-information, committees-information, index-coauthors <congress>, index-authors <congress>, index-committees <congress>, all");
     Deno.exit(1);
 }
 
