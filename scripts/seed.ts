@@ -11,7 +11,8 @@
  *   committees-information - Index committees information data
  *   crawl-people          - Crawl all /people pages to populate document cache
  *   index-coauthors <congress> - Index co-authors for specific congress (e.g., index-coauthors 20)
- *   all                   - Run all seeding operations in order (except index-coauthors)
+ *   index-authors <congress>   - Index primary authors for specific congress (e.g., index-authors 20)
+ *   all                   - Run all seeding operations in order (except index-coauthors and index-authors)
  */
 
 // Only load .env if running locally (file exists)
@@ -216,6 +217,79 @@ async function indexCoAuthors(congress: number) {
   return true;
 }
 
+async function indexAuthors(congress: number) {
+  console.log(`\n=== Indexing Authors for Congress ${congress} (using /bills/search) ===`);
+
+  // Fetch the list of all people from HREP API
+  console.log("Fetching people list from HREP API...");
+  const ddlResponse = await fetch(`${HREP_API_BASE_URL}/house-members/ddl-reference`, {
+    headers: {
+      "X-HREP-WEBSITE-BACKEND": X_HREP_WEBSITE_BACKEND!,
+    },
+  });
+
+  if (!ddlResponse.ok) {
+    console.error(`Failed to fetch people list: ${ddlResponse.status} ${ddlResponse.statusText}`);
+    return false;
+  }
+
+  const ddlData = await ddlResponse.json();
+
+  if (!ddlData.success || !ddlData.data) {
+    console.error("Failed to fetch people list: API returned error");
+    return false;
+  }
+
+  // Import mapCongressId to normalize congress IDs
+  const { mapCongressId } = await import("../lib/congress-mapper.ts");
+
+  // Filter to only people who are members of the specified congress
+  const allPeople = ddlData.data;
+  const people = allPeople.filter((person: any) =>
+    person.membership.map(mapCongressId).includes(congress)
+  );
+
+  console.log(`Found ${people.length} people (out of ${allPeople.length} total) who are members of congress ${congress}`);
+
+  let totalIndexed = 0;
+  let processedCount = 0;
+
+  // Process each person individually
+  for (const person of people) {
+    processedCount++;
+    const personId = person.author_id;
+    const fullName = person.fullname;
+
+    console.log(`\n[${processedCount}/${people.length}] Processing ${personId} (${fullName})...`);
+
+    const response = await fetch(`${DEPLOYED_API_BASE_URL}/index/documents/authors`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: INDEXER_KEY,
+        congress,
+        personId,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`  ✗ Failed: ${response.status} ${response.statusText}`);
+      const text = await response.text();
+      console.error(text);
+      continue; // Skip this person and continue with the next
+    }
+
+    const result = await response.json();
+    console.log(`  ✓ Indexed ${result.indexed} author relationships`);
+    totalIndexed += result.indexed;
+  }
+
+  console.log(`\n✓ Author indexing complete!`);
+  console.log(`  Total people processed: ${processedCount}`);
+  console.log(`  Total relationships indexed: ${totalIndexed}`);
+  return true;
+}
+
 // Main execution
 const operation = Deno.args[0];
 
@@ -228,7 +302,8 @@ if (!operation) {
   console.error("  committees-information - Index committees information data");
   console.error("  crawl-people          - Crawl all /people pages to populate document cache");
   console.error("  index-coauthors <congress> - Index co-authors for specific congress (e.g., index-coauthors 20)");
-  console.error("  all                   - Run all seeding operations in order (except index-coauthors)");
+  console.error("  index-authors <congress>   - Index primary authors for specific congress (e.g., index-authors 20)");
+  console.error("  all                   - Run all seeding operations in order (except index-coauthors and index-authors)");
   Deno.exit(1);
 }
 
@@ -266,8 +341,20 @@ switch (operation) {
     break;
   }
 
+  case "index-authors": {
+    const congress = parseInt(Deno.args[1], 10);
+    if (isNaN(congress)) {
+      console.error("Error: Congress number is required for index-authors operation");
+      console.error("Usage: deno run --allow-net --allow-env --allow-read scripts/seed.ts index-authors <congress>");
+      console.error("Example: deno run --allow-net --allow-env --allow-read scripts/seed.ts index-authors 20");
+      Deno.exit(1);
+    }
+    success = await indexAuthors(congress);
+    break;
+  }
+
   case "all": {
-    console.log("Running all seeding operations (except index-coauthors)...");
+    console.log("Running all seeding operations (except index-coauthors and index-authors)...");
     const membership = await indexPeopleMembership();
     const information = await indexPeopleInformation();
     const committees = await indexCommitteesInformation();
@@ -278,7 +365,7 @@ switch (operation) {
 
   default:
     console.error(`Error: Unknown operation "${operation}"`);
-    console.error("\nAvailable operations: people-membership, people-information, committees-information, crawl-people, index-coauthors <congress>, all");
+    console.error("\nAvailable operations: people-membership, people-information, committees-information, crawl-people, index-coauthors <congress>, index-authors <congress>, all");
     Deno.exit(1);
 }
 

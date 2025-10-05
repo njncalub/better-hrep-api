@@ -1,0 +1,33 @@
+name: Index Authors - Congress 11
+
+on:
+  workflow_dispatch: # Manual triggering only (historical data)
+
+jobs:
+  index-authors-11:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Index Authors for Congress 11
+        env:
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+          HREP_API_BASE_URL: ${{ secrets.HREP_API_BASE_URL }}
+          X_HREP_WEBSITE_BACKEND: ${{ secrets.X_HREP_WEBSITE_BACKEND }}
+        run: deno task seed index-authors 11
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Authors indexing for Congress 11 completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Authors indexing for Congress 11 failed"

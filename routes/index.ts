@@ -39,6 +39,29 @@ const IndexCoAuthorsRequestSchema = z.object({
   }),
 });
 
+const IndexAuthorsRequestSchema = z.object({
+  key: z.string().openapi({
+    example: "your-indexer-key",
+    description: "Indexer authentication key",
+  }),
+  congress: z.number().openapi({
+    example: 20,
+    description: "Congress number to index (normalized ID, e.g., 8-20)",
+  }),
+  personId: z.string().optional().openapi({
+    example: "E001",
+    description: "Optional: Index only this specific person ID",
+  }),
+  startIndex: z.number().optional().openapi({
+    example: 0,
+    description: "Optional: Start from this person index (for chunking)",
+  }),
+  chunkSize: z.number().optional().openapi({
+    example: 10,
+    description: "Optional: Process this many people (default: 10)",
+  }),
+});
+
 const indexPeopleMembershipRoute = createRoute({
   method: "post",
   path: "/index/people/membership",
@@ -250,6 +273,69 @@ const indexCoAuthorsRoute = createRoute({
   tags: ["Index"],
   summary: "Index document co-authors data using /bills/search",
   description: "Fetches co-authored bills for a specific congress using POST /bills/search. Caches co-author relationships for each document. Supports processing specific person or chunking all people. Requires valid indexer key.",
+});
+
+const indexAuthorsRoute = createRoute({
+  method: "post",
+  path: "/index/documents/authors",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: IndexAuthorsRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            message: z.string(),
+            indexed: z.number(),
+            peopleProcessed: z.number(),
+            totalPeople: z.number(),
+            nextStartIndex: z.number().optional(),
+          }),
+        },
+      },
+      description: "Successfully indexed authors data",
+    },
+    401: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Unauthorized - Invalid indexer key",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Person not found in cache",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Internal server error",
+    },
+  },
+  tags: ["Index"],
+  summary: "Index document authors data using /bills/search",
+  description: "Fetches authored bills for a specific congress using POST /bills/search. Caches primary author relationships for each document. Supports processing specific person or chunking all people. Requires valid indexer key.",
 });
 
 export const indexRouter = new OpenAPIHono();
@@ -539,6 +625,7 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
         let page = 0;
         let totalBills = 0;
         const limit = 50;
+        const seenBills = new Set<string>();
 
         while (true) {
           const response = await fetchBillsSearch({
@@ -558,25 +645,30 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
             break;
           }
 
-          console.log(`    Page ${page}: Found ${response.data.rows.length} co-authored bills`);
-          totalBills += response.data.rows.length;
+          // Check if we've seen all bills in this page (pagination loop detection)
+          const newBillsCount = response.data.rows.filter(bill => !seenBills.has(bill.bill_no)).length;
+          if (newBillsCount === 0) {
+            console.log(`    Page ${page}: All bills already seen, stopping pagination`);
+            break;
+          }
+
+          console.log(`    Page ${page}: Found ${newBillsCount} new co-authored bills (${response.data.rows.length} total in response)`);
 
           // Cache each co-authored document (document-centric)
           const atomic = kv.atomic();
           for (const bill of response.data.rows) {
-            atomic.set(
-              ["congresses", congress, bill.bill_no, "coAuthors", personId],
-              true,
-              { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
-            );
-            indexed++;
+            if (!seenBills.has(bill.bill_no)) {
+              atomic.set(
+                ["congresses", congress, bill.bill_no, "coAuthors", personId],
+                true,
+                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+              );
+              indexed++;
+              totalBills++;
+              seenBills.add(bill.bill_no);
+            }
           }
           await atomic.commit();
-
-          // Check if we've reached the last page
-          if (response.data.rows.length < limit) {
-            break;
-          }
 
           page++;
         }
@@ -623,6 +715,7 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
         let page = 0;
         let totalBills = 0;
         const limit = 50;
+        const seenBills = new Set<string>();
 
         while (true) {
           const response = await fetchBillsSearch({
@@ -642,25 +735,30 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
             break;
           }
 
-          console.log(`      Page ${page}: Found ${response.data.rows.length} co-authored bills`);
-          totalBills += response.data.rows.length;
+          // Check if we've seen all bills in this page (pagination loop detection)
+          const newBillsCount = response.data.rows.filter(bill => !seenBills.has(bill.bill_no)).length;
+          if (newBillsCount === 0) {
+            console.log(`      Page ${page}: All bills already seen, stopping pagination`);
+            break;
+          }
+
+          console.log(`      Page ${page}: Found ${newBillsCount} new co-authored bills (${response.data.rows.length} total in response)`);
 
           // Cache each co-authored document (document-centric)
           const atomic = kv.atomic();
           for (const bill of response.data.rows) {
-            atomic.set(
-              ["congresses", congress, bill.bill_no, "coAuthors", member.author_id],
-              true,
-              { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
-            );
-            indexed++;
+            if (!seenBills.has(bill.bill_no)) {
+              atomic.set(
+                ["congresses", congress, bill.bill_no, "coAuthors", member.author_id],
+                true,
+                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+              );
+              indexed++;
+              totalBills++;
+              seenBills.add(bill.bill_no);
+            }
           }
           await atomic.commit();
-
-          // Check if we've reached the last page
-          if (response.data.rows.length < limit) {
-            break;
-          }
 
           page++;
         }
@@ -686,6 +784,196 @@ indexRouter.openapi(indexCoAuthorsRoute, async (c) => {
     }
   } catch (error) {
     console.error("Error indexing co-authors:", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500
+    );
+  }
+});
+
+indexRouter.openapi(indexAuthorsRoute, async (c) => {
+  try {
+    const { key, congress, personId, startIndex = 0, chunkSize = 10 } = c.req.valid("json");
+
+    // Verify indexer key
+    if (key !== INDEXER_KEY) {
+      return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
+    }
+
+    const kv = await openKv();
+    let indexed = 0;
+
+    try {
+      // If personId is specified, only process that person
+      if (personId) {
+        console.log(`Processing single person: ${personId} for congress ${congress}`);
+
+        const apiCongressId = mapToApiId(congress);
+        console.log(`  Fetching authored bills for congress ${congress} (API ID: ${apiCongressId})...`);
+
+        // Paginate through all results with limit 50
+        let page = 0;
+        let totalBills = 0;
+        const limit = 50;
+        const seenBills = new Set<string>();
+
+        while (true) {
+          const response = await fetchBillsSearch({
+            page,
+            limit,
+            congress: apiCongressId,
+            significance: "Both",
+            field: "Author",
+            numbers: "",
+            author_id: personId,
+            author_type: "authorship",
+            committee_id: "",
+            title: "",
+          });
+
+          if (!response.success || !response.data?.rows || response.data.rows.length === 0) {
+            break;
+          }
+
+          // Check if we've seen all bills in this page (pagination loop detection)
+          const newBillsCount = response.data.rows.filter(bill => !seenBills.has(bill.bill_no)).length;
+          if (newBillsCount === 0) {
+            console.log(`    Page ${page}: All bills already seen, stopping pagination`);
+            break;
+          }
+
+          console.log(`    Page ${page}: Found ${newBillsCount} new authored bills (${response.data.rows.length} total in response)`);
+
+          // Cache each authored document (document-centric)
+          const atomic = kv.atomic();
+          for (const bill of response.data.rows) {
+            if (!seenBills.has(bill.bill_no)) {
+              atomic.set(
+                ["congresses", congress, bill.bill_no, "authors", personId],
+                true,
+                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+              );
+              indexed++;
+              totalBills++;
+              seenBills.add(bill.bill_no);
+            }
+          }
+          await atomic.commit();
+
+          page++;
+        }
+
+        console.log(`    Total: ${totalBills} authored bills indexed`);
+
+        return c.json(
+          {
+            message: `Successfully indexed authors for person ${personId} in congress ${congress}`,
+            indexed,
+            peopleProcessed: 1,
+            totalPeople: 1,
+          },
+          200
+        );
+      }
+
+      // Otherwise, process a chunk of people
+      const allPeopleResponse = await fetchHouseMembersDDL();
+
+      if (!allPeopleResponse.success || !allPeopleResponse.data) {
+        return c.json({ error: "Failed to fetch house members DDL reference" }, 500);
+      }
+
+      // Filter to only people who are members of the specified congress
+      const filteredPeople = allPeopleResponse.data.filter(person =>
+        person.membership.map(mapCongressId).includes(congress)
+      );
+
+      const totalPeople = filteredPeople.length;
+      const endIndex = Math.min(startIndex + chunkSize, totalPeople);
+      const chunk = filteredPeople.slice(startIndex, endIndex);
+
+      console.log(`Processing congress ${congress}: ${chunk.length} people (${startIndex} to ${endIndex - 1} of ${totalPeople})`);
+
+      // Process each person in the chunk
+      for (const member of chunk) {
+        console.log(`  Processing ${member.author_id} (${member.fullname})...`);
+
+        const apiCongressId = mapToApiId(congress);
+        console.log(`    Fetching authored bills for congress ${congress} (API ID: ${apiCongressId})...`);
+
+        // Paginate through all results with limit 50
+        let page = 0;
+        let totalBills = 0;
+        const limit = 50;
+        const seenBills = new Set<string>();
+
+        while (true) {
+          const response = await fetchBillsSearch({
+            page,
+            limit,
+            congress: apiCongressId,
+            significance: "Both",
+            field: "Author",
+            numbers: "",
+            author_id: member.author_id,
+            author_type: "authorship",
+            committee_id: "",
+            title: "",
+          });
+
+          if (!response.success || !response.data?.rows || response.data.rows.length === 0) {
+            break;
+          }
+
+          // Check if we've seen all bills in this page (pagination loop detection)
+          const newBillsCount = response.data.rows.filter(bill => !seenBills.has(bill.bill_no)).length;
+          if (newBillsCount === 0) {
+            console.log(`      Page ${page}: All bills already seen, stopping pagination`);
+            break;
+          }
+
+          console.log(`      Page ${page}: Found ${newBillsCount} new authored bills (${response.data.rows.length} total in response)`);
+
+          // Cache each authored document (document-centric)
+          const atomic = kv.atomic();
+          for (const bill of response.data.rows) {
+            if (!seenBills.has(bill.bill_no)) {
+              atomic.set(
+                ["congresses", congress, bill.bill_no, "authors", member.author_id],
+                true,
+                { expireIn: 5 * 24 * 60 * 60 * 1000 } // 5 days TTL
+              );
+              indexed++;
+              totalBills++;
+              seenBills.add(bill.bill_no);
+            }
+          }
+          await atomic.commit();
+
+          page++;
+        }
+
+        console.log(`      Total: ${totalBills} authored bills indexed`);
+      }
+
+      const nextStartIndex = endIndex < totalPeople ? endIndex : undefined;
+
+      return c.json(
+        {
+          message: `Successfully indexed authors for ${chunk.length} people in congress ${congress} (${startIndex} to ${endIndex - 1} of ${totalPeople})`,
+          indexed,
+          peopleProcessed: chunk.length,
+          totalPeople,
+          nextStartIndex,
+        },
+        200
+      );
+    } catch (error) {
+      console.error("Error in inner try block:", error);
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error indexing authors:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       500

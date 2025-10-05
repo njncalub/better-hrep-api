@@ -1,0 +1,35 @@
+name: Index Authors - Congress 20
+
+on:
+  schedule:
+    - cron: '0 1 */2 * *'  # Every 2 days at 1:00 AM UTC (offset from coauthors)
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  index-authors-20:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Index Authors for Congress 20
+        env:
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+          HREP_API_BASE_URL: ${{ secrets.HREP_API_BASE_URL }}
+          X_HREP_WEBSITE_BACKEND: ${{ secrets.X_HREP_WEBSITE_BACKEND }}
+        run: deno task seed index-authors 20
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Authors indexing for Congress 20 completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Authors indexing for Congress 20 failed"
