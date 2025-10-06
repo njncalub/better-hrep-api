@@ -1,14 +1,18 @@
-name: Index Committees - Congress 08
+name: Index Committees - Congress 09
 
 on:
   schedule:
-    # TODO: Temporary schedule for initial indexing - runs daily at 1:00 AM UTC
+    # TODO: Temporary schedule for initial indexing - runs daily at 2:00 AM UTC
     # Remove or adjust after initial data population is complete
-    - cron: '0 1 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch: # Manual triggering
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
-  index-committees-8:
+  index-committees-09:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,18 +24,18 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Index Committees for Congress 8
+      - name: Index Committees for Congress 9
         env:
           DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
           INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: deno task seed index-committees 8
+        run: deno task seed index-committees 9
 
       - name: Notify Success
         if: success()
-        run: echo "✅ Committees indexing for Congress 8 completed successfully"
+        run: echo "✅ Committees indexing for Congress 9 completed successfully"
 
       - name: Notify Failure
         if: failure()
-        run: echo "❌ Committees indexing for Congress 8 failed"
+        run: echo "❌ Committees indexing for Congress 9 failed"

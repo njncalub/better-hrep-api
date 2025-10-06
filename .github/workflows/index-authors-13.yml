@@ -7,6 +7,10 @@ on:
     - cron: '0 6 * * *'
   workflow_dispatch: # Manual triggering
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   index-authors-13:
     runs-on: ubuntu-latest
