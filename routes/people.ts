@@ -362,6 +362,51 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
 
       // If we have all cached data, use it (zero API calls!)
       if (cachedAuthored && cachedCoAuthored && cachedCommittees) {
+        // Enrich documents with title and dateFiled from cache
+        const kv3 = await openKv();
+
+        const enrichedAuthored = await Promise.all(
+          cachedAuthored.map(async (doc) => {
+            const docInfo = await kv3.get<{
+              titleFull: string;
+              titleShort: string;
+              dateFiled: string | null;
+            }>(["congresses", doc.congress, doc.documentKey, "information"]);
+
+            if (docInfo.value) {
+              return {
+                ...doc,
+                titleFull: docInfo.value.titleFull,
+                titleShort: docInfo.value.titleShort,
+                dateFiled: docInfo.value.dateFiled,
+              };
+            }
+            return doc;
+          }),
+        );
+
+        const enrichedCoAuthored = await Promise.all(
+          cachedCoAuthored.map(async (doc) => {
+            const docInfo = await kv3.get<{
+              titleFull: string;
+              titleShort: string;
+              dateFiled: string | null;
+            }>(["congresses", doc.congress, doc.documentKey, "information"]);
+
+            if (docInfo.value) {
+              return {
+                ...doc,
+                titleFull: docInfo.value.titleFull,
+                titleShort: docInfo.value.titleShort,
+                dateFiled: docInfo.value.dateFiled,
+              };
+            }
+            return doc;
+          }),
+        );
+
+        await kv3.close();
+
         person = {
           id: info.id,
           personId,
@@ -371,8 +416,8 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
           suffix: info.suffix,
           nickName: info.nickName,
           congresses: membershipCongresses,
-          authoredDocuments: cachedAuthored,
-          coAuthoredDocuments: cachedCoAuthored,
+          authoredDocuments: enrichedAuthored,
+          coAuthoredDocuments: enrichedCoAuthored,
           committees: cachedCommittees,
         };
       } else {
@@ -454,8 +499,8 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
           ]);
 
         // Flatten results
-        const authoredDocuments = cachedAuthored ?? authoredResults.flat();
-        const coAuthoredDocuments = cachedCoAuthored ??
+        const unenrichedAuthored = cachedAuthored ?? authoredResults.flat();
+        const unenrichedCoAuthored = cachedCoAuthored ??
           coAuthoredResults.flat();
         const committees: Committee[] = cachedCommittees ?? (
           committeeResponse.success && committeeResponse.data?.rows
@@ -468,6 +513,51 @@ peopleRouter.openapi(personByIdRoute, async (c) => {
             }))
             : []
         );
+
+        // Enrich documents with title and dateFiled from cache
+        const kv4 = await openKv();
+
+        const authoredDocuments = await Promise.all(
+          unenrichedAuthored.map(async (doc) => {
+            const docInfo = await kv4.get<{
+              titleFull: string;
+              titleShort: string;
+              dateFiled: string | null;
+            }>(["congresses", doc.congress, doc.documentKey, "information"]);
+
+            if (docInfo.value) {
+              return {
+                ...doc,
+                titleFull: docInfo.value.titleFull,
+                titleShort: docInfo.value.titleShort,
+                dateFiled: docInfo.value.dateFiled,
+              };
+            }
+            return doc;
+          }),
+        );
+
+        const coAuthoredDocuments = await Promise.all(
+          unenrichedCoAuthored.map(async (doc) => {
+            const docInfo = await kv4.get<{
+              titleFull: string;
+              titleShort: string;
+              dateFiled: string | null;
+            }>(["congresses", doc.congress, doc.documentKey, "information"]);
+
+            if (docInfo.value) {
+              return {
+                ...doc,
+                titleFull: docInfo.value.titleFull,
+                titleShort: docInfo.value.titleShort,
+                dateFiled: docInfo.value.dateFiled,
+              };
+            }
+            return doc;
+          }),
+        );
+
+        await kv4.close();
 
         person = {
           id: info.id,
