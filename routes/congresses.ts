@@ -368,9 +368,14 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
 
     const kv = await openKv();
 
+    // Filter out invalid/placeholder documents (e.g., HB00000)
+    const validBills = response.data.rows.filter((bill) => {
+      return (bill.title_full || bill.title_short) && bill.bill_no_f && bill.date_filed;
+    });
+
     // For each bill, get authors and coAuthors from KV cache
     const documents = await Promise.all(
-      response.data.rows.map(async (bill) => {
+      validBills.map(async (bill) => {
         // List all authors for this document
         const authorsIter = kv.list({
           prefix: ["congresses", congressNum, bill.bill_no, "authors"],

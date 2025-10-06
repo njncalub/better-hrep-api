@@ -230,76 +230,93 @@ pages.get("/congresses/:congressNumber/documents/:documentKey", async (c) => {
   const congressNumber = c.req.param("congressNumber");
   const documentKey = c.req.param("documentKey");
 
-  const bill = await fetchAPI<DocumentInfo>(
-    c,
-    `/congresses/${congressNumber}/documents/${documentKey}`,
-  );
+  try {
+    const bill = await fetchAPI<DocumentInfo>(
+      c,
+      `/congresses/${congressNumber}/documents/${documentKey}`,
+    );
 
-  return c.html(
-    <Layout
-      title={bill.documentKey + " - " + congressNumber +
-        "th Congress - Better HREP API"}
-    >
-      <nav>
-        <a href={`/congresses/${congressNumber}`}>
-          ← Back to {congressNumber}th Congress
-        </a>
-      </nav>
+    return c.html(
+      <Layout
+        title={bill.documentKey + " - " + congressNumber +
+          "th Congress - Better HREP API"}
+      >
+        <nav>
+          <a href={`/congresses/${congressNumber}`}>
+            ← Back to {congressNumber}th Congress
+          </a>
+        </nav>
 
-      <h1>{bill.documentKey}</h1>
-      <p class="meta">
-        {bill.billType && bill.significance &&
-          `${bill.billType} | ${bill.significance}`}
-        {bill.billType && !bill.significance && bill.billType}
-        {!bill.billType && bill.significance && bill.significance}
-      </p>
+        <h1>{bill.documentKey}</h1>
+        <p class="meta">
+          {bill.billType && bill.significance &&
+            `${bill.billType} | ${bill.significance}`}
+          {bill.billType && !bill.significance && bill.billType}
+          {!bill.billType && bill.significance && bill.significance}
+        </p>
 
-      <h2>Title</h2>
-      <p>{bill.titleFull || bill.titleShort}</p>
+        <h2>Title</h2>
+        <p>{bill.titleFull || bill.titleShort}</p>
 
-      {bill.abstract && (
-        <>
-          <h2>Abstract</h2>
-          <p>{bill.abstract}</p>
-        </>
-      )}
+        {bill.abstract && (
+          <>
+            <h2>Abstract</h2>
+            <p>{bill.abstract}</p>
+          </>
+        )}
 
-      <h2>Details</h2>
-      <ul>
-        <li>
-          <strong>Session:</strong> {bill.sessionNumber}
-        </li>
-        <li>
-          <strong>Date Filed:</strong> {bill.dateFiled}
-        </li>
-        <li>
-          <strong>Status:</strong> {bill.status}
-        </li>
-        <li>
-          <strong>Download:</strong>{" "}
-          <a href={bill.downloadUrl} target="_blank">PDF</a>
-        </li>
-      </ul>
+        <h2>Details</h2>
+        <ul>
+          <li>
+            <strong>Session:</strong> {bill.sessionNumber}
+          </li>
+          <li>
+            <strong>Date Filed:</strong> {bill.dateFiled}
+          </li>
+          <li>
+            <strong>Status:</strong> {bill.status}
+          </li>
+          <li>
+            <strong>Download:</strong>{" "}
+            <a href={bill.downloadUrl} target="_blank">PDF</a>
+          </li>
+        </ul>
 
-      <h2>Authors ({bill.authors.length})</h2>
-      <div class="people-grid">
-        {bill.authors.map((author) => (
-          <PersonCard person={author} showStats={false} />
-        ))}
-      </div>
+        <h2>Authors ({bill.authors.length})</h2>
+        <div class="people-grid">
+          {bill.authors.map((author) => (
+            <PersonCard person={author} showStats={false} />
+          ))}
+        </div>
 
-      {bill.coAuthors.length > 0 && (
-        <>
-          <h2>Co-Authors ({bill.coAuthors.length})</h2>
-          <div class="people-grid">
-            {bill.coAuthors.map((coAuthor) => (
-              <PersonCard person={coAuthor} showStats={false} />
-            ))}
-          </div>
-        </>
-      )}
-    </Layout>,
-  );
+        {bill.coAuthors.length > 0 && (
+          <>
+            <h2>Co-Authors ({bill.coAuthors.length})</h2>
+            <div class="people-grid">
+              {bill.coAuthors.map((coAuthor) => (
+                <PersonCard person={coAuthor} showStats={false} />
+              ))}
+            </div>
+          </>
+        )}
+      </Layout>,
+    );
+  } catch (_error) {
+    return c.html(
+      <Layout title="Document Not Found - Better HREP API">
+        <h1>Document Not Found</h1>
+        <p>
+          The document {documentKey} was not found in the {congressNumber}th Congress.
+        </p>
+        <p>
+          <a href={`/congresses/${congressNumber}`}>
+            ← Back to {congressNumber}th Congress
+          </a>
+        </p>
+      </Layout>,
+      404,
+    );
+  }
 });
 
 // People list
