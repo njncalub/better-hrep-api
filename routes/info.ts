@@ -33,7 +33,8 @@ const infoRoute = createRoute({
   },
   tags: ["Info"],
   summary: "Get congress membership information",
-  description: "Returns a mapping of congress numbers to arrays of author IDs. This endpoint proxies /house-members/ddl-reference and transforms the data for easier consumption by indexing scripts.",
+  description:
+    "Returns a mapping of congress numbers to arrays of author IDs. This endpoint proxies /house-members/ddl-reference and transforms the data for easier consumption by indexing scripts.",
 });
 
 export const infoRouter = new OpenAPIHono();
@@ -44,7 +45,10 @@ infoRouter.openapi(infoRoute, async (c) => {
     const response = await fetchHouseMembersDDL();
 
     if (!response.success || !response.data) {
-      return c.json({ error: "Failed to fetch house members DDL reference" }, 500);
+      return c.json(
+        { error: "Failed to fetch house members DDL reference" },
+        500,
+      );
     }
 
     // Transform data: congress number -> array of author IDs
@@ -65,7 +69,9 @@ infoRouter.openapi(infoRoute, async (c) => {
 
     // Sort keys numerically (8, 9, 10, ..., 20) and sort person IDs alphabetically within each congress
     const sortedCongressMap: Record<string, string[]> = {};
-    const sortedKeys = Object.keys(congressMap).sort((a, b) => parseInt(a) - parseInt(b));
+    const sortedKeys = Object.keys(congressMap).sort((a, b) =>
+      parseInt(a) - parseInt(b)
+    );
 
     for (const key of sortedKeys) {
       sortedCongressMap[key] = congressMap[key].sort();
@@ -77,13 +83,13 @@ infoRouter.openapi(infoRoute, async (c) => {
         success: true,
         data: sortedCongressMap,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Error fetching info:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      500
+      500,
     );
   }
 });

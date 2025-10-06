@@ -4,7 +4,7 @@ on:
   schedule:
     # TODO: Temporary schedule for initial indexing - runs daily at 12:00 PM UTC
     # Remove or adjust after initial data population is complete
-    - cron: '0 12 * * *'
+    - cron: "0 12,0 * * *"
   workflow_dispatch: # Manual triggering
 
 permissions:

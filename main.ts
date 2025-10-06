@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { Hono } from "hono";
 import { trimTrailingSlash } from "hono/trailing-slash";
+import { serveStatic } from "hono/deno";
 import { congressesRouter } from "./routes/congresses.ts";
 import { peopleRouter } from "./routes/people.ts";
 import { committeesRouter } from "./routes/committees.ts";
@@ -17,6 +18,9 @@ const apiApp = new OpenAPIHono({ strict: false });
 app.use("*", trimTrailingSlash());
 apiApp.use("*", trimTrailingSlash());
 
+// Serve static files from /static
+app.use("/static/*", serveStatic({ root: "./" }));
+
 // Mount API routes under /api
 apiApp.route("/", congressesRouter);
 apiApp.route("/", peopleRouter);
@@ -31,7 +35,8 @@ apiApp.doc("/doc", {
   info: {
     version: "0.0.1",
     title: "Better HREP API",
-    description: "A cleaner, well-documented proxy API for the House of Representatives website.",
+    description:
+      "A cleaner, well-documented proxy API for the House of Representatives website.",
   },
   servers: [
     {

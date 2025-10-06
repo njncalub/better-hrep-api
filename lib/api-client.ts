@@ -1,20 +1,22 @@
 import "@std/dotenv/load";
 import type {
-  CongressReferenceResponse,
-  HouseMembersResponse,
-  CoAuthoredBillsResponse,
-  CommitteeMembershipResponse,
-  HouseMemberDDLResponse,
-  BillsSearchResponse,
-  CommitteeListResponse,
   BillsListResponse,
+  BillsSearchResponse,
+  CoAuthoredBillsResponse,
+  CommitteeListResponse,
+  CommitteeMembershipResponse,
+  CongressReferenceResponse,
+  HouseMemberDDLResponse,
+  HouseMembersResponse,
 } from "../types/source.ts";
 
 const HREP_API_BASE_URL = Deno.env.get("HREP_API_BASE_URL")!;
 const X_HREP_WEBSITE_BACKEND = Deno.env.get("X_HREP_WEBSITE_BACKEND")!;
 
 if (!HREP_API_BASE_URL || !X_HREP_WEBSITE_BACKEND) {
-  throw new Error("HREP_API_BASE_URL and X_HREP_WEBSITE_BACKEND environment variables must be set");
+  throw new Error(
+    "HREP_API_BASE_URL and X_HREP_WEBSITE_BACKEND environment variables must be set",
+  );
 }
 
 export interface FetchOptions {
@@ -27,7 +29,7 @@ export interface FetchOptions {
  */
 export async function fetchFromAPI<T>(
   path: string,
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<T> {
   const { method = "GET", body } = options;
   const url = `${HREP_API_BASE_URL}${path}`;
@@ -47,7 +49,9 @@ export async function fetchFromAPI<T>(
   const response = await fetch(url, fetchOptions);
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   return response.json();
@@ -57,7 +61,9 @@ export async function fetchFromAPI<T>(
  * Fetch congress reference data from /system-config/reference-congress
  */
 export function fetchCongressReference(): Promise<CongressReferenceResponse> {
-  return fetchFromAPI<CongressReferenceResponse>("/system-config/reference-congress");
+  return fetchFromAPI<CongressReferenceResponse>(
+    "/system-config/reference-congress",
+  );
 }
 
 /**
@@ -66,7 +72,7 @@ export function fetchCongressReference(): Promise<CongressReferenceResponse> {
 export function fetchHouseMembers(
   page: number = 0,
   limit: number = 100,
-  filter: string = ""
+  filter: string = "",
 ): Promise<HouseMembersResponse> {
   return fetchFromAPI<HouseMembersResponse>("/house-members/list", {
     method: "POST",
@@ -81,7 +87,7 @@ export function fetchCoAuthoredBills(
   author: string,
   page: number = 0,
   limit: number = 1000,
-  filter: string = ""
+  filter: string = "",
 ): Promise<CoAuthoredBillsResponse> {
   return fetchFromAPI<CoAuthoredBillsResponse>("/house-members/co-author", {
     method: "POST",
@@ -93,12 +99,15 @@ export function fetchCoAuthoredBills(
  * Fetch committee membership for a specific member from /house-members/committee-membership
  */
 export function fetchCommitteeMembership(
-  memberCode: string
+  memberCode: string,
 ): Promise<CommitteeMembershipResponse> {
-  return fetchFromAPI<CommitteeMembershipResponse>("/house-members/committee-membership", {
-    method: "POST",
-    body: { member_code: memberCode },
-  });
+  return fetchFromAPI<CommitteeMembershipResponse>(
+    "/house-members/committee-membership",
+    {
+      method: "POST",
+      body: { member_code: memberCode },
+    },
+  );
 }
 
 /**
@@ -116,12 +125,15 @@ export function fetchPrincipalAuthoredBills(
   author: string,
   page: number = 0,
   limit: number = 1000,
-  filter: string = ""
+  filter: string = "",
 ): Promise<CoAuthoredBillsResponse> {
-  return fetchFromAPI<CoAuthoredBillsResponse>("/house-members/principal-author", {
-    method: "POST",
-    body: { page, limit, filter, author },
-  });
+  return fetchFromAPI<CoAuthoredBillsResponse>(
+    "/house-members/principal-author",
+    {
+      method: "POST",
+      body: { page, limit, filter, author },
+    },
+  );
 }
 
 /**
@@ -174,7 +186,7 @@ export function fetchBillsSearch(params: {
  */
 export function fetchCommitteeList(
   page: number = 0,
-  limit: number = 100
+  limit: number = 100,
 ): Promise<CommitteeListResponse> {
   return fetchFromAPI<CommitteeListResponse>("/committee/list", {
     method: "POST",
@@ -189,7 +201,7 @@ export function fetchBillsList(
   page: number = 0,
   limit: number = 10,
   congress: number,
-  filter: string = ""
+  filter: string = "",
 ): Promise<BillsListResponse> {
   return fetchFromAPI<BillsListResponse>("/bills/list", {
     method: "POST",
@@ -202,7 +214,7 @@ export function fetchBillsList(
  */
 export function fetchBillByDocumentKey(
   congress: number,
-  documentKey: string
+  documentKey: string,
 ): Promise<BillsSearchResponse> {
   return fetchFromAPI<BillsSearchResponse>("/bills/search", {
     method: "POST",

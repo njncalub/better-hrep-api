@@ -2,9 +2,9 @@ name: Index Committees - Congress 09
 
 on:
   schedule:
-    # TODO: Temporary schedule for initial indexing - runs daily at 2:00 AM UTC
+    # TODO: Temporary schedule for initial indexing - runs daily at 2:00UTC
     # Remove or adjust after initial data population is complete
-    - cron: '0 2 * * *'
+    - cron: "0 2,14 * * *"
   workflow_dispatch: # Manual triggering
 
 permissions:

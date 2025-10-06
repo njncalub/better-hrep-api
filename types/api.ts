@@ -26,7 +26,9 @@ export type Congress = z.infer<typeof CongressSchema>;
 /**
  * Array of congresses
  */
-export const CongressListSchema = z.array(CongressSchema).openapi("CongressList");
+export const CongressListSchema = z.array(CongressSchema).openapi(
+  "CongressList",
+);
 
 export type CongressList = z.infer<typeof CongressListSchema>;
 
@@ -146,7 +148,7 @@ export type Person = z.infer<typeof PersonSchema>;
  */
 export function createPaginatedResponseSchema<T extends z.ZodTypeAny>(
   dataSchema: T,
-  schemaName: string
+  schemaName: string,
 ) {
   return z
     .object({
@@ -178,7 +180,7 @@ export function createPaginatedResponseSchema<T extends z.ZodTypeAny>(
  */
 export const PaginatedPeopleSchema = createPaginatedResponseSchema(
   PersonSchema,
-  "PaginatedPeople"
+  "PaginatedPeople",
 );
 
 export type PaginatedPeople = z.infer<typeof PaginatedPeopleSchema>;
@@ -209,7 +211,8 @@ export const CommitteeInfoSchema = z
       description: "Committee jurisdiction",
     }),
     location: z.string().nullable().openapi({
-      example: "3rd Floor Ramon V. Mitra Bldg., House of Representatives, Quezon City",
+      example:
+        "3rd Floor Ramon V. Mitra Bldg., House of Representatives, Quezon City",
       description: "Committee office location",
     }),
     type: z.string().openapi({
@@ -233,7 +236,7 @@ export type CommitteeInfo = z.infer<typeof CommitteeInfoSchema>;
  */
 export const PaginatedCommitteesSchema = createPaginatedResponseSchema(
   CommitteeInfoSchema,
-  "PaginatedCommittees"
+  "PaginatedCommittees",
 );
 
 export type PaginatedCommittees = z.infer<typeof PaginatedCommitteesSchema>;
@@ -416,12 +419,16 @@ export const DocumentInfoSchema = z
       description: "Current status of the bill",
     }),
     downloadUrl: z.string().openapi({
-      example: "https://docs.congress.hrep.online/legisdocs/basic_20/HB00001.pdf",
+      example:
+        "https://docs.congress.hrep.online/legisdocs/basic_20/HB00001.pdf",
       description: "URL to download the bill PDF",
     }),
     authors: z.array(AuthorSchema).openapi({
       example: [
-        { keyName: "ROMUALDEZ, FERDINAND MARTIN G.", keyNameCode: "Romualdez (F.M.)" },
+        {
+          keyName: "ROMUALDEZ, FERDINAND MARTIN G.",
+          keyNameCode: "Romualdez (F.M.)",
+        },
         { keyName: "ACIDRE, JUDE A.", keyNameCode: "Acidre" },
       ],
       description: "List of authors",
@@ -429,7 +436,7 @@ export const DocumentInfoSchema = z
     coAuthors: z.array(AuthorSchema).openapi({
       example: [
         { keyName: "DE VENECIA, MARIA GEORGINA P.", keyNameCode: "De Venecia" },
-        { keyName: "RIVERA, NOEL \"Bong\" N.", keyNameCode: "Rivera" },
+        { keyName: 'RIVERA, NOEL "Bong" N.', keyNameCode: "Rivera" },
       ],
       description: "List of co-authors",
     }),
@@ -465,7 +472,7 @@ export type DocumentInfo = z.infer<typeof DocumentInfoSchema>;
  */
 export const PaginatedDocumentsSchema = createPaginatedResponseSchema(
   DocumentInfoSchema,
-  "PaginatedDocuments"
+  "PaginatedDocuments",
 );
 
 export type PaginatedDocuments = z.infer<typeof PaginatedDocumentsSchema>;

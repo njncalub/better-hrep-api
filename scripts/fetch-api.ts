@@ -8,7 +8,9 @@ const payload = args[2] ? JSON.parse(args[2]) : undefined;
 if (!path) {
   console.error("Usage: deno task fetch <path> [method] [payload]");
   console.error("Example: deno task fetch /system-config/reference-congress");
-  console.error("Example: deno task fetch /some-endpoint POST '{\"key\":\"value\"}'");
+  console.error(
+    'Example: deno task fetch /some-endpoint POST \'{"key":"value"}\'',
+  );
   Deno.exit(1);
 }
 
@@ -25,6 +27,9 @@ try {
   console.log(JSON.stringify(data, null, 2));
   console.log();
 } catch (error) {
-  console.error("❌ Error:", error instanceof Error ? error.message : String(error));
+  console.error(
+    "❌ Error:",
+    error instanceof Error ? error.message : String(error),
+  );
   Deno.exit(1);
 }

@@ -1,9 +1,19 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { fetchCongressReference, fetchBillsList, fetchBillByDocumentKey } from "../lib/api-client.ts";
+import {
+  fetchBillByDocumentKey,
+  fetchBillsList,
+  fetchCongressReference,
+} from "../lib/api-client.ts";
 import { mapCongressId, mapToApiId } from "../lib/congress-mapper.ts";
 import { openKv } from "../lib/kv.ts";
-import { CongressListSchema, type Congress, PaginatedDocumentsSchema, DocumentInfoSchema, type DocumentInfo } from "../types/api.ts";
-import type { CongressReferenceItem, BillListItem } from "../types/source.ts";
+import {
+  type Congress,
+  CongressListSchema,
+  type DocumentInfo,
+  DocumentInfoSchema,
+  PaginatedDocumentsSchema,
+} from "../types/api.ts";
+import type { BillListItem, CongressReferenceItem } from "../types/source.ts";
 
 const congressesRoute = createRoute({
   method: "get",
@@ -106,7 +116,8 @@ const congressDocumentsRoute = createRoute({
   },
   tags: ["Congresses"],
   summary: "Get documents for a specific congress",
-  description: "Returns a paginated list of bills/documents for a specific congress. Fetches from the source API and validates author names against the people cache.",
+  description:
+    "Returns a paginated list of bills/documents for a specific congress. Fetches from the source API and validates author names against the people cache.",
 });
 
 /**
@@ -167,7 +178,8 @@ const congressDocumentByKeyRoute = createRoute({
   },
   tags: ["Congresses"],
   summary: "Get a specific document by key",
-  description: "Returns details for a specific bill/document using the /bills/search endpoint from the source API.",
+  description:
+    "Returns details for a specific bill/document using the /bills/search endpoint from the source API.",
 });
 
 /**
@@ -176,7 +188,7 @@ const congressDocumentByKeyRoute = createRoute({
  */
 async function transformAuthor(
   kv: Deno.Kv,
-  personId: string
+  personId: string,
 ) {
   const personInfoResult = await kv.get([
     "people",
@@ -221,7 +233,7 @@ async function transformAuthor(
  */
 async function transformCommittee(
   kv: Deno.Kv,
-  committeeId: string
+  committeeId: string,
 ) {
   const committeeInfoResult = await kv.get([
     "committees",
@@ -265,23 +277,23 @@ async function transformBillToDocument(
   kv: Deno.Kv,
   authorPersonIds: string[],
   coAuthorPersonIds: string[],
-  committeeIds: string[]
+  committeeIds: string[],
 ): Promise<DocumentInfo> {
   const normalizedCongress = mapCongressId(bill.congress);
 
   // Build authors array from cached person IDs
   const authors = await Promise.all(
-    authorPersonIds.map((personId) => transformAuthor(kv, personId))
+    authorPersonIds.map((personId) => transformAuthor(kv, personId)),
   );
 
   // Build coAuthors array from cached person IDs
   const coAuthors = await Promise.all(
-    coAuthorPersonIds.map((personId) => transformAuthor(kv, personId))
+    coAuthorPersonIds.map((personId) => transformAuthor(kv, personId)),
   );
 
   // Build committees array from cached committee IDs
   const committees = await Promise.all(
-    committeeIds.map((committeeId) => transformCommittee(kv, committeeId))
+    committeeIds.map((committeeId) => transformCommittee(kv, committeeId)),
   );
 
   return {
@@ -297,7 +309,9 @@ async function transformBillToDocument(
     downloadUrl: bill.text_as_filed,
     authors: authors.filter((a): a is NonNullable<typeof a> => a !== null),
     coAuthors: coAuthors.filter((a): a is NonNullable<typeof a> => a !== null),
-    committees: committees.filter((c): c is NonNullable<typeof c> => c !== null),
+    committees: committees.filter((c): c is NonNullable<typeof c> =>
+      c !== null
+    ),
     billType: bill.bill_type,
     significance: bill.significance_desc,
   };
@@ -323,7 +337,7 @@ congressesRouter.openapi(congressesRoute, async (c) => {
     console.error("Error fetching congress data:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      500
+      500,
     );
   }
 });
@@ -341,7 +355,12 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
     const apiCongressId = mapToApiId(congressNum);
 
     // Fetch from the source API
-    const response = await fetchBillsList(pageNum, limitNum, apiCongressId, filter);
+    const response = await fetchBillsList(
+      pageNum,
+      limitNum,
+      apiCongressId,
+      filter,
+    );
 
     if (!response.success || !response.data) {
       return c.json({ error: "Failed to fetch bills from source API" }, 500);
@@ -354,7 +373,7 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
       response.data.rows.map(async (bill) => {
         // List all authors for this document
         const authorsIter = kv.list({
-          prefix: ["congresses", congressNum, bill.bill_no, "authors"]
+          prefix: ["congresses", congressNum, bill.bill_no, "authors"],
         });
         const authorPersonIds: string[] = [];
         for await (const entry of authorsIter) {
@@ -367,7 +386,7 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
 
         // List all coAuthors for this document
         const coAuthorsIter = kv.list({
-          prefix: ["congresses", congressNum, bill.bill_no, "coAuthors"]
+          prefix: ["congresses", congressNum, bill.bill_no, "coAuthors"],
         });
         const coAuthorPersonIds: string[] = [];
         for await (const entry of coAuthorsIter) {
@@ -380,7 +399,7 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
 
         // List all committees for this document
         const committeesIter = kv.list({
-          prefix: ["congresses", congressNum, bill.bill_no, "committees"]
+          prefix: ["congresses", congressNum, bill.bill_no, "committees"],
         });
         const committeeIds: string[] = [];
         for await (const entry of committeesIter) {
@@ -391,8 +410,14 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
           }
         }
 
-        return transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds, committeeIds);
-      })
+        return transformBillToDocument(
+          bill,
+          kv,
+          authorPersonIds,
+          coAuthorPersonIds,
+          committeeIds,
+        );
+      }),
     );
 
     await kv.close();
@@ -408,13 +433,13 @@ congressesRouter.openapi(congressDocumentsRoute, async (c) => {
         totalPages,
         data: documents,
       },
-      200
+      200,
     );
   } catch (error) {
     console.error("Error fetching congress documents:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      500
+      500,
     );
   }
 });
@@ -447,7 +472,7 @@ congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
 
     // List all authors for this document
     const authorsIter = kv.list({
-      prefix: ["congresses", congressNum, documentKey, "authors"]
+      prefix: ["congresses", congressNum, documentKey, "authors"],
     });
     const authorPersonIds: string[] = [];
     for await (const entry of authorsIter) {
@@ -460,7 +485,7 @@ congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
 
     // List all coAuthors for this document
     const coAuthorsIter = kv.list({
-      prefix: ["congresses", congressNum, documentKey, "coAuthors"]
+      prefix: ["congresses", congressNum, documentKey, "coAuthors"],
     });
     const coAuthorPersonIds: string[] = [];
     for await (const entry of coAuthorsIter) {
@@ -473,7 +498,7 @@ congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
 
     // List all committees for this document
     const committeesIter = kv.list({
-      prefix: ["congresses", congressNum, documentKey, "committees"]
+      prefix: ["congresses", congressNum, documentKey, "committees"],
     });
     const committeeIds: string[] = [];
     for await (const entry of committeesIter) {
@@ -484,7 +509,13 @@ congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
       }
     }
 
-    const document = await transformBillToDocument(bill, kv, authorPersonIds, coAuthorPersonIds, committeeIds);
+    const document = await transformBillToDocument(
+      bill,
+      kv,
+      authorPersonIds,
+      coAuthorPersonIds,
+      committeeIds,
+    );
 
     await kv.close();
 
@@ -493,7 +524,7 @@ congressesRouter.openapi(congressDocumentByKeyRoute, async (c) => {
     console.error("Error fetching congress document by key:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      500
+      500,
     );
   }
 });

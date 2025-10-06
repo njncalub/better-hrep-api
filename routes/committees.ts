@@ -159,6 +159,7 @@ committeesRouter.openapi(committeeListRoute, async (c) => {
       jurisdiction: committee.jurisdiction,
       location: committee.location,
       type: committee.type_desc,
+      documents: [], // Empty array for list view to match schema
     }));
 
     return c.json({

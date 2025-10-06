@@ -326,4 +326,3 @@ export interface BillListItem {
 }
 
 export type BillsListResponse = PaginatedResponse<BillListItem>;
-

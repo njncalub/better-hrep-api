@@ -64,7 +64,8 @@ const cachedByFullNameRoute = createRoute({
   },
   tags: ["Cached"],
   summary: "Get people cache by full name index",
-  description: "Returns all people cache entries indexed by full name with their primary keys. Requires valid indexer key.",
+  description:
+    "Returns all people cache entries indexed by full name with their primary keys. Requires valid indexer key.",
   hide: true,
 });
 
@@ -118,7 +119,8 @@ const cachedByNameCodeRoute = createRoute({
   },
   tags: ["Cached"],
   summary: "Get people cache by name code index",
-  description: "Returns all people cache entries indexed by name code with their primary keys. Requires valid indexer key.",
+  description:
+    "Returns all people cache entries indexed by name code with their primary keys. Requires valid indexer key.",
   hide: true,
 });
 
@@ -159,7 +161,7 @@ cachedRouter.openapi(cachedByFullNameRoute, async (c) => {
     console.error("Error fetching cache by full name:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      500
+      500,
     );
   }
 });
@@ -199,7 +201,7 @@ cachedRouter.openapi(cachedByNameCodeRoute, async (c) => {
     console.error("Error fetching cache by name code:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      500
+      500,
     );
   }
 });
