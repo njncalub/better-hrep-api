@@ -164,6 +164,48 @@ async function transformHouseMember(
     const coAuthoredDocuments = coAuthoredEntry.value ?? [];
     const committees = committeesEntry.value ?? [];
 
+    // Enrich authored documents with title and dateFiled from cache
+    const enrichedAuthoredDocs = await Promise.all(
+      authoredDocuments.map(async (doc) => {
+        const docInfo = await kv.get<{
+          titleFull: string;
+          titleShort: string;
+          dateFiled: string | null;
+        }>(["congresses", doc.congress, doc.documentKey, "information"]);
+
+        if (docInfo.value) {
+          return {
+            ...doc,
+            titleFull: docInfo.value.titleFull,
+            titleShort: docInfo.value.titleShort,
+            dateFiled: docInfo.value.dateFiled,
+          };
+        }
+        return doc;
+      }),
+    );
+
+    // Enrich co-authored documents with title and dateFiled from cache
+    const enrichedCoAuthoredDocs = await Promise.all(
+      coAuthoredDocuments.map(async (doc) => {
+        const docInfo = await kv.get<{
+          titleFull: string;
+          titleShort: string;
+          dateFiled: string | null;
+        }>(["congresses", doc.congress, doc.documentKey, "information"]);
+
+        if (docInfo.value) {
+          return {
+            ...doc,
+            titleFull: docInfo.value.titleFull,
+            titleShort: docInfo.value.titleShort,
+            dateFiled: docInfo.value.dateFiled,
+          };
+        }
+        return doc;
+      }),
+    );
+
     return {
       id: member.id,
       personId: member.author_id,
@@ -173,8 +215,8 @@ async function transformHouseMember(
       suffix: member.suffix,
       nickName: member.nick_name,
       congresses,
-      authoredDocuments,
-      coAuthoredDocuments,
+      authoredDocuments: enrichedAuthoredDocs,
+      coAuthoredDocuments: enrichedCoAuthoredDocs,
       committees,
     };
   } catch (error) {

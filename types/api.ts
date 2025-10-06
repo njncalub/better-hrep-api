@@ -45,6 +45,18 @@ export const DocumentSchema = z
       example: "HB02385",
       description: "Document number",
     }),
+    titleFull: z.string().optional().openapi({
+      example: "AN ACT STRENGTHENING THE REGULATORY POWERS...",
+      description: "Full title of the bill (from cache if available)",
+    }),
+    titleShort: z.string().optional().openapi({
+      example: "Agricultural Tariffication Act Amendment",
+      description: "Short title of the bill (from cache if available)",
+    }),
+    dateFiled: z.string().nullable().optional().openapi({
+      example: "2025-06-30",
+      description: "Date the bill was filed (from cache if available)",
+    }),
   })
   .openapi("Document");
 

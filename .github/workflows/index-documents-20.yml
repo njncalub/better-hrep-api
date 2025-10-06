@@ -1,0 +1,39 @@
+name: Index Documents Information - Congress 20
+
+on:
+  schedule:
+    - cron: "0 13,1 * * *"
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  index-documents-20:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Index Documents Information for Congress 20
+        env:
+          DEPLOYED_API_BASE_URL: ${{ secrets.DEPLOYED_API_BASE_URL }}
+          INDEXER_KEY: ${{ secrets.INDEXER_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: deno task seed index-documents-information 20
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Documents information indexing for Congress 20 completed successfully"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Documents information indexing for Congress 20 failed"

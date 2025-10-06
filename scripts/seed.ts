@@ -6,13 +6,14 @@
  *   deno run --allow-net --allow-env --allow-read scripts/seed.ts <operation> [congress]
  *
  * Operations:
- *   people-membership           - Index people membership data
- *   people-information          - Index people information data
- *   committees-information      - Index committees information data
- *   index-coauthors <congress>  - Index co-authors for specific congress (e.g., index-coauthors 20)
- *   index-authors <congress>    - Index primary authors for specific congress (e.g., index-authors 20)
- *   index-committees <congress> - Index committees for specific congress (e.g., index-committees 20)
- *   all                         - Run all seeding operations in order (except index-coauthors, index-authors, and index-committees)
+ *   people-membership                      - Index people membership data
+ *   people-information                     - Index people information data
+ *   committees-information                 - Index committees information data
+ *   index-coauthors <congress>             - Index co-authors for specific congress (e.g., index-coauthors 20)
+ *   index-authors <congress>               - Index primary authors for specific congress (e.g., index-authors 20)
+ *   index-committees <congress>            - Index committees for specific congress (e.g., index-committees 20)
+ *   index-documents-information <congress> - Index document information (title, dateFiled) for specific congress (e.g., index-documents-information 20)
+ *   all                                    - Run all seeding operations in order (except congress-specific operations)
  */
 
 // Only load .env if running locally (file exists)
@@ -688,6 +689,147 @@ curl -X POST ${DEPLOYED_API_BASE_URL}/index/documents/committees \\
   return true;
 }
 
+async function indexDocumentsInformation(congress: number) {
+  console.log(
+    `\n=== Indexing Documents Information for Congress ${congress} ===`,
+  );
+
+  let totalIndexed = 0;
+  let processedCount = 0;
+  let page = 0;
+  const limit = 25;
+  const failedItems: Array<{ documentKey: string; error: string }> = [];
+
+  // Process documents page by page
+  while (true) {
+    console.log(`\nFetching page ${page + 1}...`);
+    const response = await fetch(
+      `${DEPLOYED_API_BASE_URL}/congresses/${congress}/documents?page=${page}&limit=${limit}`,
+    );
+
+    if (!response.ok) {
+      console.error(
+        `Failed to fetch documents: ${response.status} ${response.statusText}`,
+      );
+      return false;
+    }
+
+    const data = await response.json();
+
+    if (!data.data || data.data.length === 0) {
+      break;
+    }
+
+    console.log(
+      `Processing ${data.data.length} documents from page ${page + 1}/${data.totalPages}...`,
+    );
+
+    // Process each document on this page
+    for (const doc of data.data) {
+      processedCount++;
+
+      console.log(
+        `  [${processedCount}] Processing ${doc.documentKey}...`,
+      );
+
+      const retryResult = await retryWithBackoff(async () => {
+        const indexResponse = await fetch(
+          `${DEPLOYED_API_BASE_URL}/index/documents/information`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              key: INDEXER_KEY,
+              congress,
+              documentKey: doc.documentKey,
+            }),
+          },
+        );
+
+        if (!indexResponse.ok) {
+          const text = await indexResponse.text();
+          throw new Error(
+            `${indexResponse.status} ${indexResponse.statusText}\n${text}`,
+          );
+        }
+
+        return await indexResponse.json();
+      });
+
+      if (!retryResult.success) {
+        console.error(`    ✗ Failed after 3 retries: ${retryResult.error}`);
+        failedItems.push({
+          documentKey: doc.documentKey,
+          error: retryResult.error || "Unknown error",
+        });
+        continue;
+      }
+
+      const result = retryResult.data!;
+      console.log(`    ✓ Indexed document information`);
+      totalIndexed += result.indexed;
+    }
+
+    // Check if we've reached the end
+    if (page >= data.totalPages - 1) {
+      break;
+    }
+
+    page++;
+  }
+
+  // Create GitHub issues for failed items
+  if (failedItems.length > 0) {
+    console.log(
+      `\n⚠️  ${failedItems.length} items failed. Creating GitHub issues...`,
+    );
+    for (const { documentKey, error } of failedItems) {
+      const title =
+        `[Indexing Error] Failed to index document information for ${documentKey} in congress ${congress}`;
+      const body = `## Indexing Error
+
+**Operation:** Index Documents Information
+**Congress:** ${congress}
+**Document Key:** ${documentKey}
+
+**Error:**
+\`\`\`
+${error}
+\`\`\`
+
+**Details:**
+- Failed after 3 retry attempts with exponential backoff
+- Timestamp: ${new Date().toISOString()}
+
+**Action Required:**
+Please investigate why the indexing failed for this document and re-run the indexing operation manually if needed.
+
+**Manual Re-run Command:**
+\`\`\`bash
+deno task seed index-documents-information ${congress}
+\`\`\`
+
+Or via API:
+\`\`\`bash
+curl -X POST ${DEPLOYED_API_BASE_URL}/index/documents/information \\
+  -H "Content-Type: application/json" \\
+  -d '{"key": "YOUR_INDEXER_KEY", "congress": ${congress}, "documentKey": "${documentKey}"}'
+\`\`\`
+`;
+      await createGitHubIssue(
+        title,
+        body,
+        `document-info-${documentKey}-congress-${congress}`,
+      );
+    }
+  }
+
+  console.log(`\n✓ Document information indexing complete!`);
+  console.log(`  Total documents processed: ${processedCount}`);
+  console.log(`  Total documents indexed: ${totalIndexed}`);
+  return true;
+}
+
 // Main execution
 const operation = Deno.args[0];
 
@@ -710,7 +852,10 @@ if (!operation) {
     "  index-committees <congress> - Index committees for specific congress (e.g., index-committees 20)",
   );
   console.error(
-    "  all                    - Run all seeding operations in order (except index-coauthors, index-authors, and index-committees)",
+    "  index-documents-information <congress> - Index document information (title, dateFiled) for specific congress (e.g., index-documents-information 20)",
+  );
+  console.error(
+    "  all                    - Run all seeding operations in order (except congress-specific operations)",
   );
   Deno.exit(1);
 }
@@ -787,6 +932,24 @@ switch (operation) {
     break;
   }
 
+  case "index-documents-information": {
+    const congress = parseInt(Deno.args[1], 10);
+    if (isNaN(congress)) {
+      console.error(
+        "Error: Congress number is required for index-documents-information operation",
+      );
+      console.error(
+        "Usage: deno run --allow-net --allow-env --allow-read scripts/seed.ts index-documents-information <congress>",
+      );
+      console.error(
+        "Example: deno run --allow-net --allow-env --allow-read scripts/seed.ts index-documents-information 20",
+      );
+      Deno.exit(1);
+    }
+    success = await indexDocumentsInformation(congress);
+    break;
+  }
+
   case "all": {
     console.log(
       "Running all seeding operations (except index-coauthors, index-authors, and index-committees)...",
@@ -801,7 +964,7 @@ switch (operation) {
   default:
     console.error(`Error: Unknown operation "${operation}"`);
     console.error(
-      "\nAvailable operations: people-membership, people-information, committees-information, index-coauthors <congress>, index-authors <congress>, index-committees <congress>, all",
+      "\nAvailable operations: people-membership, people-information, committees-information, index-coauthors <congress>, index-authors <congress>, index-committees <congress>, index-documents-information <congress>, all",
     );
     Deno.exit(1);
 }

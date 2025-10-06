@@ -339,7 +339,9 @@ pages.get("/people", async (c) => {
       </p>
 
       <div class="people-grid">
-        {people.data.map((person) => <PersonCard person={person} showStats />)}
+        {people.data.map((person) => (
+          <PersonCard key={person.personId} person={person} showStats />
+        ))}
       </div>
 
       <Pagination
@@ -411,6 +413,16 @@ pages.get("/people/:personId", async (c) => {
                         >
                           {doc.documentKey}
                         </a>
+                        {doc.titleFull && (
+                          <div class="bill-info">
+                            <span class="bill-title">{doc.titleShort || doc.titleFull}</span>
+                          </div>
+                        )}
+                        {doc.dateFiled && (
+                          <div class="bill-info">
+                            <span class="bill-date">Filed: {doc.dateFiled}</span>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -459,6 +471,16 @@ pages.get("/people/:personId", async (c) => {
                         >
                           {doc.documentKey}
                         </a>
+                        {doc.titleFull && (
+                          <div class="bill-info">
+                            <span class="bill-title">{doc.titleShort || doc.titleFull}</span>
+                          </div>
+                        )}
+                        {doc.dateFiled && (
+                          <div class="bill-info">
+                            <span class="bill-date">Filed: {doc.dateFiled}</span>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>

@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import {
+  fetchBillByDocumentKey,
   fetchBillsSearch,
   fetchCoAuthoredBills,
   fetchCommitteeList,
@@ -80,6 +81,21 @@ const IndexCommitteesRequestSchema = z.object({
   committeeId: z.string().openapi({
     example: "0543",
     description: "Committee ID to index",
+  }),
+});
+
+const IndexDocumentsInformationRequestSchema = z.object({
+  key: z.string().openapi({
+    example: "your-indexer-key",
+    description: "Indexer authentication key",
+  }),
+  congress: z.number().openapi({
+    example: 20,
+    description: "Congress number (normalized ID, e.g., 8-20)",
+  }),
+  documentKey: z.string().openapi({
+    example: "HB00001",
+    description: "Document key to index (e.g., HB00001)",
   }),
 });
 
@@ -413,6 +429,67 @@ const indexCommitteesRoute = createRoute({
   summary: "Index committee documents data using /bills/search",
   description:
     "Fetches bills for a specific committee and congress using POST /bills/search with field='Committees'. Caches committee-document relationships. Requires valid indexer key.",
+});
+
+const indexDocumentsInformationRoute = createRoute({
+  method: "post",
+  path: "/index/documents/information",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: IndexDocumentsInformationRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            message: z.string(),
+            indexed: z.number(),
+          }),
+        },
+      },
+      description: "Successfully indexed document information",
+    },
+    401: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Unauthorized - Invalid indexer key",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Document not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+      description: "Internal server error",
+    },
+  },
+  tags: ["Index"],
+  summary: "Index document information (title, dateFiled) to KV cache",
+  description:
+    "Fetches bill information for a specific document and congress, then caches title and dateFiled to Deno KV. This enables displaying document titles on person pages without fetching full document details. Requires valid indexer key.",
 });
 
 export const indexRouter = new OpenAPIHono();
@@ -1355,6 +1432,69 @@ indexRouter.openapi(indexCommitteesRoute, async (c) => {
     }
   } catch (error) {
     console.error("Error indexing committees:", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500,
+    );
+  }
+});
+
+indexRouter.openapi(indexDocumentsInformationRoute, async (c) => {
+  try {
+    const { key, congress, documentKey } = c.req.valid("json");
+
+    // Verify indexer key
+    if (key !== INDEXER_KEY) {
+      return c.json({ error: "Unauthorized - Invalid indexer key" }, 401);
+    }
+
+    const kv = await openKv();
+    console.log(
+      `Indexing document information: ${documentKey} for congress ${congress}`,
+    );
+
+    // Convert congress number to API ID (20 → 103)
+    const apiCongressId = mapToApiId(congress);
+
+    // Fetch document data from source API
+    const response = await fetchBillByDocumentKey(apiCongressId, documentKey);
+
+    if (!response.success || !response.data) {
+      await kv.close();
+      return c.json({ error: "Failed to fetch bill from source API" }, 500);
+    }
+
+    // Check if we got any results
+    if (response.data.rows.length === 0) {
+      await kv.close();
+      return c.json({ error: "Document not found" }, 404);
+    }
+
+    const bill = response.data.rows[0];
+
+    // Cache document information: title and dateFiled
+    await kv.set(["congresses", congress, documentKey, "information"], {
+      titleFull: bill.title_full,
+      titleShort: bill.title_short,
+      dateFiled: bill.date_filed,
+    });
+
+    await kv.close();
+
+    console.log(
+      `  ✓ Indexed document information for ${documentKey} in congress ${congress}`,
+    );
+
+    return c.json(
+      {
+        message:
+          `Successfully indexed document information for ${documentKey} in congress ${congress}`,
+        indexed: 1,
+      },
+      200,
+    );
+  } catch (error) {
+    console.error("Error indexing document information:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       500,
