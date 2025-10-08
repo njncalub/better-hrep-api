@@ -1,10 +1,10 @@
 name: Index Co-authors - Congress 16
 
 on:
-  schedule:
-    # TODO: Temporary schedule for initial indexing - runs daily at 9:00UTC
-    # Remove or adjust after initial data population is complete
-    - cron: "0 9,21 * * *"
+  # schedule:
+  #   # TODO: Temporary schedule for initial indexing - runs daily at 9:00UTC
+  #   # Remove or adjust after initial data population is complete
+  #   - cron: "0 9,21 * * *"
   workflow_dispatch: # Manual triggering
 
 permissions:

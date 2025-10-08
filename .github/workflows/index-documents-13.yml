@@ -1,8 +1,8 @@
 name: Index Documents Information - Congress 13
 
 on:
-  schedule:
-    - cron: "0 6,18 * * *"
+  # schedule:
+  #   - cron: "0 6,18 * * *"
   workflow_dispatch: # Allow manual triggering
 
 permissions:
